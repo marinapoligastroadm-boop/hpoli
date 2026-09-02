@@ -1430,7 +1430,7 @@ tbody tr:hover {
 
 .calculation-strip {
   display: grid;
-  grid-template-columns: auto repeat(3, 1fr);
+  grid-template-columns: auto repeat(2, 1fr);
   align-items: center;
   gap: 17px;
   border: 1px solid #c9e4e1;

@@ -82,11 +82,29 @@ const brl = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 
-const formatDate = (value: string | null) => {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(
-    new Date(`${value.slice(0, 10)}T12:00:00Z`),
-  );
+const TAX_RATE = 9.15;
+
+const taxFromPaidAmount = (amount: number) => amount * (TAX_RATE / 100);
+
+const receiptLabel = (status: InvoiceStatus) => {
+  if (status === "received") return "Sim";
+  if (status === "partial") return "Parcial";
+  return "Não";
+};
+
+const receiptStatusClass = (status: InvoiceStatus) =>
+  status === "received" || status === "partial" ? status : "pending";
+
+const today = () => {
+  const current = new Date();
+  const local = new Date(current.getTime() - current.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+};
+
+const addDays = (date: string, days: number) => {
+  const parsed = new Date(`${date}T12:00:00`);
+  parsed.setDate(parsed.getDate() + days);
+  return parsed.toISOString().slice(0, 10);
 };
 
 const statusLabels: Record<InvoiceStatus, string> = {
@@ -223,58 +241,79 @@ function InvoiceTable({
       <table>
         <thead>
           <tr>
-            <th>Fatura / NF</th>
             <th>Convênio</th>
-            <th>Emissão</th>
-            <th>Vencimento</th>
-            <th>Valor bruto</th>
+            <th>Produção</th>
+            <th>Glosa</th>
+            <th>Valor pago</th>
+            <th>Imposto 9,15%</th>
+            <th>Valor líquido</th>
             <th>Recebido</th>
-            <th>Status</th>
+            <th>Rateio feito na prod.</th>
             {editable ? <th className="actions-column">Ações</th> : null}
           </tr>
         </thead>
         <tbody>
-          {invoices.map((invoice) => (
-            <tr key={invoice.id}>
-              <td data-label="Fatura / NF">
-                <strong>#{invoice.invoice_number}</strong>
-              </td>
-              <td data-label="Convênio">
-                {insurerNames.get(invoice.insurer_id) || "Convênio"}
-              </td>
-              <td data-label="Emissão">{formatDate(invoice.issue_date)}</td>
-              <td data-label="Vencimento">{formatDate(invoice.due_date)}</td>
-              <td data-label="Valor bruto">{brl.format(invoice.gross_amount)}</td>
-              <td data-label="Recebido">{brl.format(invoice.received_amount)}</td>
-              <td data-label="Status">
-                <span className={`status-pill status-${invoice.status}`}>
-                  {statusLabels[invoice.status]}
-                </span>
-              </td>
-              {editable ? (
-                <td className="row-actions" data-label="Ações">
-                  <button
-                    className="icon-button edit"
-                    type="button"
-                    onClick={() => onEdit(invoice)}
-                    aria-label={`Editar faturamento ${invoice.invoice_number}`}
-                    title="Editar faturamento"
-                  >
-                    <Edit3 size={17} />
-                  </button>
-                  <button
-                    className="icon-button danger"
-                    type="button"
-                    onClick={() => onDelete(invoice)}
-                    aria-label={`Excluir faturamento ${invoice.invoice_number}`}
-                    title="Excluir faturamento"
-                  >
-                    <Trash2 size={17} />
-                  </button>
+          {invoices.map((invoice) => {
+            const insurerName =
+              insurerNames.get(invoice.insurer_id) || "Convênio";
+            const tax = taxFromPaidAmount(Number(invoice.received_amount));
+            const net = Math.max(0, Number(invoice.received_amount) - tax);
+
+            return (
+              <tr key={invoice.id}>
+                <td data-label="Convênio">
+                  <strong>{insurerName}</strong>
                 </td>
-              ) : null}
-            </tr>
-          ))}
+                <td data-label="Produção">
+                  {brl.format(invoice.gross_amount)}
+                </td>
+                <td data-label="Glosa">{brl.format(invoice.glosa_amount)}</td>
+                <td data-label="Valor pago">
+                  {brl.format(invoice.received_amount)}
+                </td>
+                <td data-label="Imposto 9,15%">{brl.format(tax)}</td>
+                <td data-label="Valor líquido">{brl.format(net)}</td>
+                <td data-label="Recebido">
+                  <span
+                    className={`status-pill status-${receiptStatusClass(invoice.status)}`}
+                  >
+                    {receiptLabel(invoice.status)}
+                  </span>
+                </td>
+                <td data-label="Rateio feito na produção">
+                  <span
+                    className={`status-pill status-${
+                      invoice.production_split_done ? "received" : "pending"
+                    }`}
+                  >
+                    {invoice.production_split_done ? "Sim" : "Não"}
+                  </span>
+                </td>
+                {editable ? (
+                  <td className="row-actions" data-label="Ações">
+                    <button
+                      className="icon-button edit"
+                      type="button"
+                      onClick={() => onEdit(invoice)}
+                      aria-label={`Editar faturamento de ${insurerName}`}
+                      title="Editar faturamento"
+                    >
+                      <Edit3 size={17} />
+                    </button>
+                    <button
+                      className="icon-button danger"
+                      type="button"
+                      onClick={() => onDelete(invoice)}
+                      aria-label={`Excluir faturamento de ${insurerName}`}
+                      title="Excluir faturamento"
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </td>
+                ) : null}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -308,9 +347,8 @@ function ConfirmDialog({
         </span>
         <h2 id="confirm-title">Excluir faturamento?</h2>
         <p id="confirm-description">
-          A fatura <strong>#{invoice.invoice_number}</strong> será excluída junto
-          com os registros de recebimento e rateio relacionados. Esta ação não
-          pode ser desfeita.
+          Este faturamento será excluído junto com os registros de recebimento e
+          rateio relacionados. Esta ação não pode ser desfeita.
         </p>
         <div className="dialog-actions">
           <button
@@ -369,7 +407,7 @@ function BillingPage({
             invoice.billing_unit === unit &&
             invoice.competence.slice(0, 7) === selectedPeriod,
         )
-        .sort((a, b) => b.issue_date.localeCompare(a.issue_date)),
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     [data.invoices, selectedPeriod, unit],
   );
 
@@ -379,10 +417,13 @@ function BillingPage({
       data.insurers.map((insurer) => [insurer.id, insurer.name]),
     );
     return unitInvoices.filter((invoice) => {
-      const matchesStatus = status === "all" || invoice.status === status;
+      const matchesStatus =
+        status === "all" ||
+        (status === "pending"
+          ? invoice.status !== "partial" && invoice.status !== "received"
+          : invoice.status === status);
       const matchesSearch =
         !term ||
-        invoice.invoice_number.toLocaleLowerCase("pt-BR").includes(term) ||
         (insurerNames.get(invoice.insurer_id) || "")
           .toLocaleLowerCase("pt-BR")
           .includes(term);
@@ -394,13 +435,18 @@ function BillingPage({
     () =>
       unitInvoices.reduce(
         (accumulator, invoice) => ({
-          gross: accumulator.gross + Number(invoice.gross_amount),
-          net: accumulator.net + Number(invoice.net_expected),
-          received: accumulator.received + Number(invoice.received_amount),
-          outstanding:
-            accumulator.outstanding + Number(invoice.outstanding_amount),
+          production: accumulator.production + Number(invoice.gross_amount),
+          glosa: accumulator.glosa + Number(invoice.glosa_amount),
+          paid: accumulator.paid + Number(invoice.received_amount),
+          net:
+            accumulator.net +
+            Math.max(
+              0,
+              Number(invoice.received_amount) -
+                taxFromPaidAmount(Number(invoice.received_amount)),
+            ),
         }),
-        { gross: 0, net: 0, received: 0, outstanding: 0 },
+        { production: 0, glosa: 0, paid: 0, net: 0 },
       ),
     [unitInvoices],
   );
@@ -421,32 +467,36 @@ function BillingPage({
     setSaving(true);
     try {
       const gross = Number(values.gross_amount.replace(",", ".")) || 0;
-      const taxRate = Number(values.tax_rate.replace(",", ".")) || 0;
       const glosa = Number(values.glosa_amount.replace(",", ".")) || 0;
-      const netExpected = Math.max(0, gross - (gross * taxRate) / 100 - glosa);
-      let received = Number(values.received_amount.replace(",", ".")) || 0;
-      let finalStatus = values.status;
-
-      if (finalStatus === "received" && received === 0) received = netExpected;
-      if (received >= netExpected && netExpected > 0 && finalStatus === "pending") {
-        finalStatus = "received";
-      } else if (received > 0 && received < netExpected && finalStatus === "pending") {
-        finalStatus = "partial";
-      }
+      const received = Number(values.received_amount.replace(",", ".")) || 0;
+      const issueDate = editingInvoice?.issue_date || today();
+      const insurer = data.insurers.find(
+        (item) => item.id === values.insurer_id,
+      );
 
       const payload = {
         organization_id: data.membership.organization_id,
         insurer_id: values.insurer_id,
-        invoice_number: values.invoice_number.trim(),
-        competence: values.competence,
-        issue_date: values.issue_date,
-        due_date: values.due_date,
+        invoice_number:
+          editingInvoice?.invoice_number ||
+          `AUTO-${unit}-${selectedPeriod.replace("-", "")}-${crypto.randomUUID()
+            .slice(0, 8)
+            .toUpperCase()}`,
+        competence: editingInvoice?.competence || `${selectedPeriod}-01`,
+        issue_date: issueDate,
+        due_date:
+          editingInvoice?.due_date ||
+          addDays(issueDate, insurer?.payment_term_days || 0),
         gross_amount: gross,
-        tax_rate: taxRate,
+        tax_rate: TAX_RATE,
         glosa_amount: glosa,
         received_amount: received,
-        status: finalStatus,
-        paid_at: values.paid_at || null,
+        status: values.status,
+        paid_at:
+          values.status === "received" || values.status === "partial"
+            ? editingInvoice?.paid_at || today()
+            : null,
+        production_split_done: values.production_split_done,
         notes: values.notes.trim() || null,
         billing_unit: unit,
       };
@@ -550,32 +600,32 @@ function BillingPage({
 
       <section className="metrics-grid">
         <MetricCard
-          label="Faturado"
-          value={brl.format(totals.gross)}
-          note="Valor bruto do mês"
+          label="Produção"
+          value={brl.format(totals.production)}
+          note="Produção total do mês"
           tone="blue"
           icon={<FileText size={21} />}
         />
         <MetricCard
-          label="Líquido esperado"
-          value={brl.format(totals.net)}
-          note="Após impostos e glosas"
-          tone="slate"
-          icon={<TrendingUp size={21} />}
+          label="Glosa"
+          value={brl.format(totals.glosa)}
+          note="Glosas informadas"
+          tone="gold"
+          icon={<WalletCards size={21} />}
         />
         <MetricCard
-          label="Recebido"
-          value={brl.format(totals.received)}
-          note="Recebimentos informados"
+          label="Valor pago"
+          value={brl.format(totals.paid)}
+          note="Valores pagos no mês"
           tone="teal"
           icon={<CircleDollarSign size={21} />}
         />
         <MetricCard
-          label="Em aberto"
-          value={brl.format(totals.outstanding)}
-          note="Saldo a receber"
-          tone="gold"
-          icon={<WalletCards size={21} />}
+          label="Valor líquido"
+          value={brl.format(totals.net)}
+          note="Após imposto de 9,15%"
+          tone="slate"
+          icon={<TrendingUp size={21} />}
         />
       </section>
 
@@ -583,7 +633,7 @@ function BillingPage({
         <div className="content-card-header table-toolbar">
           <div>
             <h2>Faturamentos do mês</h2>
-            <p>Acompanhe os valores, vencimentos e situação de cada registro.</p>
+            <p>Acompanhe produção, pagamentos, impostos e rateios.</p>
           </div>
           <div className="toolbar-controls">
             <label className="search-control">
@@ -592,7 +642,7 @@ function BillingPage({
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar fatura ou convênio"
+                placeholder="Buscar convênio"
               />
             </label>
             <select
@@ -603,12 +653,10 @@ function BillingPage({
               }
               aria-label="Filtrar por status"
             >
-              <option value="all">Todos os status</option>
-              {Object.entries(statusLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
+              <option value="all">Todos</option>
+              <option value="pending">Não recebido</option>
+              <option value="partial">Recebido parcialmente</option>
+              <option value="received">Recebido</option>
             </select>
           </div>
         </div>
@@ -757,7 +805,6 @@ function OverviewPage({ data }: { data: AppData }) {
                 </span>
                 <div>
                   <strong>
-                    #{invoice.invoice_number} ·{" "}
                     {insurerNames.get(invoice.insurer_id) || "Convênio"}
                   </strong>
                   <small>

@@ -39,6 +39,7 @@ export type Invoice = {
   net_expected: number;
   outstanding_amount: number;
   billing_unit: BillingUnit;
+  production_split_done: boolean;
 };
 
 export type Partner = {
@@ -57,16 +58,11 @@ export type Membership = {
 };
 
 export type InvoiceFormValues = {
-  invoice_number: string;
   insurer_id: string;
-  competence: string;
-  issue_date: string;
-  due_date: string;
   gross_amount: string;
-  tax_rate: string;
   glosa_amount: string;
   received_amount: string;
   status: InvoiceStatus;
-  paid_at: string;
+  production_split_done: boolean;
   notes: string;
 };
