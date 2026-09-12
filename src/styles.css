@@ -763,6 +763,20 @@ p {
   margin-bottom: 0;
 }
 
+.page-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.report-button {
+  color: var(--navy-800);
+  border-color: #c3d8e2;
+  background: #f8fbfc;
+}
+
 .date-badge {
   min-height: 42px;
   border: 1px solid var(--slate-200);
@@ -1803,6 +1817,16 @@ tbody tr:hover {
 
   .page-heading-row .primary-button,
   .date-badge {
+    width: 100%;
+  }
+
+  .page-heading-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .page-heading-actions button {
     width: 100%;
   }
 

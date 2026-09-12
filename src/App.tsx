@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
+  Download,
   Edit3,
   FileText,
   Landmark,
@@ -86,6 +87,7 @@ const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+const alphabetic = new Intl.Collator("pt-BR", { sensitivity: "base" });
 
 const TAX_RATE = 9.15;
 
@@ -402,8 +404,13 @@ function BillingPage({
   const [deleteInvoice, setDeleteInvoice] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const selectedPeriod = periodKey(year, month);
+  const insurerNames = useMemo(
+    () => new Map(data.insurers.map((insurer) => [insurer.id, insurer.name])),
+    [data.insurers],
+  );
   const unitInvoices = useMemo(
     () =>
       data.invoices
@@ -412,15 +419,18 @@ function BillingPage({
             invoice.billing_unit === unit &&
             invoice.competence.slice(0, 7) === selectedPeriod,
         )
-        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
-    [data.invoices, selectedPeriod, unit],
+        .sort((a, b) => {
+          const byInsurer = alphabetic.compare(
+            insurerNames.get(a.insurer_id) || "",
+            insurerNames.get(b.insurer_id) || "",
+          );
+          return byInsurer || b.updated_at.localeCompare(a.updated_at);
+        }),
+    [data.invoices, insurerNames, selectedPeriod, unit],
   );
 
   const filteredInvoices = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
-    const insurerNames = new Map(
-      data.insurers.map((insurer) => [insurer.id, insurer.name]),
-    );
     return unitInvoices.filter((invoice) => {
       const matchesStatus =
         status === "all" ||
@@ -434,7 +444,7 @@ function BillingPage({
           .includes(term);
       return matchesStatus && matchesSearch;
     });
-  }, [data.insurers, search, status, unitInvoices]);
+  }, [insurerNames, search, status, unitInvoices]);
 
   const totals = useMemo(
     () =>
@@ -466,6 +476,36 @@ function BillingPage({
   const openEdit = (invoice: Invoice) => {
     setEditingInvoice(invoice);
     setDialogOpen(true);
+  };
+
+  const downloadPdf = async () => {
+    if (!unitInvoices.length) {
+      notify("error", "Não há faturamentos neste mês para gerar o relatório.");
+      return;
+    }
+
+    setExportingPdf(true);
+    try {
+      const { downloadBillingReport } = await import("./lib/billingReport");
+      downloadBillingReport({
+        organizationName: data.organizationName,
+        unit,
+        periodKey: selectedPeriod,
+        periodLabel: `${fullMonthNames[month]} de ${year}`,
+        invoices: unitInvoices,
+        insurers: data.insurers,
+      });
+      notify("success", "Relatório em PDF gerado com sucesso.");
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar o relatório em PDF.",
+      );
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const saveInvoice = async (values: InvoiceFormValues) => {
@@ -587,11 +627,26 @@ function BillingPage({
             {unitInvoices.length === 1 ? "registro" : "registros"}
           </p>
         </div>
-        {editable ? (
-          <button className="primary-button" type="button" onClick={openNew}>
-            <Plus size={19} /> Novo faturamento
+        <div className="page-heading-actions">
+          <button
+            className="secondary-button report-button"
+            type="button"
+            onClick={downloadPdf}
+            disabled={!unitInvoices.length || exportingPdf}
+          >
+            {exportingPdf ? (
+              <LoaderCircle className="spin" size={18} />
+            ) : (
+              <Download size={18} />
+            )}
+            {exportingPdf ? "Gerando PDF..." : "Baixar relatório PDF"}
           </button>
-        ) : null}
+          {editable ? (
+            <button className="primary-button" type="button" onClick={openNew}>
+              <Plus size={19} /> Novo faturamento
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <MonthSelector
