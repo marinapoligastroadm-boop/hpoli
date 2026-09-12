@@ -1301,6 +1301,58 @@ tbody tr:hover {
   font-size: 0.79rem;
 }
 
+.insurer-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.insurer-card {
+  align-items: start;
+}
+
+.insurer-card-copy {
+  min-width: 0;
+}
+
+.insurer-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+
+.insurer-title-line h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0;
+}
+
+.insurer-title-line .active-label,
+.insurer-title-line .inactive-label {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+
+.insurer-card-copy small {
+  display: block;
+  color: var(--slate-500);
+  font-size: 0.65rem;
+  margin-top: 7px;
+}
+
+.directory-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.directory-actions .icon-button {
+  width: 33px;
+  height: 33px;
+  border-color: transparent;
+  background: var(--slate-100);
+}
+
 .partner-card {
   display: grid;
   justify-items: center;
@@ -1418,6 +1470,14 @@ tbody tr:hover {
   padding: 22px 24px 24px;
 }
 
+.insurer-dialog {
+  width: min(100%, 620px);
+}
+
+.insurer-form {
+  padding: 22px 24px 24px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1451,6 +1511,25 @@ tbody tr:hover {
 .calculation-strip strong {
   color: var(--slate-900);
   font-size: 0.82rem;
+}
+
+.form-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #c9e4e1;
+  border-radius: 11px;
+  padding: 13px 15px;
+  margin-top: 19px;
+  color: var(--teal-700);
+  background: #f0f9f8;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.form-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 .dialog-actions {
@@ -1890,7 +1969,8 @@ tbody tr:hover {
   }
 
   .dialog-header,
-  .invoice-form {
+  .invoice-form,
+  .insurer-form {
     padding-inline: 17px;
   }
 

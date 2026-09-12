@@ -66,3 +66,10 @@ export type InvoiceFormValues = {
   production_split_done: boolean;
   notes: string;
 };
+
+export type InsurerFormValues = {
+  name: string;
+  registration_code: string;
+  payment_term_days: string;
+  active: boolean;
+};

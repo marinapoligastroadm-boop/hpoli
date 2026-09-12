@@ -24,11 +24,16 @@ import {
   X,
 } from "lucide-react";
 import { AuthView } from "./components/AuthView";
+import {
+  InsurerDeleteDialog,
+  InsurerDialog,
+} from "./components/InsurerDialog";
 import { InvoiceDialog } from "./components/InvoiceDialog";
 import { supabase } from "./lib/supabase";
 import type {
   BillingUnit,
   Insurer,
+  InsurerFormValues,
   Invoice,
   InvoiceFormValues,
   InvoiceStatus,
@@ -828,30 +833,266 @@ function OverviewPage({ data }: { data: AppData }) {
   );
 }
 
-function InsurersPage({ insurers }: { insurers: Insurer[] }) {
+function InsurersPage({
+  data,
+  onReload,
+  notify,
+}: {
+  data: AppData;
+  onReload: () => Promise<void>;
+  notify: (type: "success" | "error", message: string) => void;
+}) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingInsurer, setEditingInsurer] = useState<Insurer | null>(null);
+  const [deleteInsurer, setDeleteInsurer] = useState<Insurer | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const editable = data.membership.role !== "viewer";
+
+  const invoiceCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const invoice of data.invoices) {
+      counts.set(invoice.insurer_id, (counts.get(invoice.insurer_id) || 0) + 1);
+    }
+    return counts;
+  }, [data.invoices]);
+
+  const openNew = () => {
+    setEditingInsurer(null);
+    setDialogOpen(true);
+  };
+
+  const openEdit = (insurer: Insurer) => {
+    setEditingInsurer(insurer);
+    setDialogOpen(true);
+  };
+
+  const saveInsurer = async (values: InsurerFormValues) => {
+    const name = values.name.trim();
+    const paymentTermDays = Number(values.payment_term_days);
+
+    if (!name) {
+      notify("error", "Informe o nome do convênio.");
+      return;
+    }
+    if (
+      !Number.isInteger(paymentTermDays) ||
+      paymentTermDays < 0 ||
+      paymentTermDays > 3650
+    ) {
+      notify("error", "Informe um prazo de pagamento válido.");
+      return;
+    }
+
+    const normalizedName = name.toLocaleLowerCase("pt-BR");
+    const duplicate = data.insurers.some(
+      (insurer) =>
+        insurer.id !== editingInsurer?.id &&
+        insurer.name.trim().toLocaleLowerCase("pt-BR") === normalizedName,
+    );
+    if (duplicate) {
+      notify("error", "Já existe um convênio com esse nome.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        name,
+        registration_code: values.registration_code.trim() || null,
+        payment_term_days: paymentTermDays,
+        active: values.active,
+      };
+
+      if (editingInsurer) {
+        const { error } = await supabase
+          .from("insurers")
+          .update(payload)
+          .eq("id", editingInsurer.id)
+          .select("id")
+          .single();
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("insurers")
+          .insert({
+            ...payload,
+            organization_id: data.membership.organization_id,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+      }
+
+      await onReload();
+      setDialogOpen(false);
+      setEditingInsurer(null);
+      notify(
+        "success",
+        editingInsurer
+          ? "Convênio atualizado com sucesso."
+          : "Convênio cadastrado com sucesso.",
+      );
+    } catch (error) {
+      const code =
+        typeof error === "object" && error && "code" in error
+          ? String(error.code)
+          : "";
+      notify(
+        "error",
+        code === "23505"
+          ? "Já existe um convênio com esse nome."
+          : error instanceof Error
+            ? error.message
+            : "Não foi possível salvar o convênio.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteInsurer) return;
+    if ((invoiceCounts.get(deleteInsurer.id) || 0) > 0) {
+      notify(
+        "error",
+        "Este convênio possui faturamentos vinculados e não pode ser excluído.",
+      );
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("insurers")
+        .delete()
+        .eq("id", deleteInsurer.id)
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      await onReload();
+      setDeleteInsurer(null);
+      notify("success", "Convênio excluído com sucesso.");
+    } catch (error) {
+      const code =
+        typeof error === "object" && error && "code" in error
+          ? String(error.code)
+          : "";
+      notify(
+        "error",
+        code === "23503"
+          ? "Este convênio possui faturamentos vinculados e não pode ser excluído."
+          : error instanceof Error
+            ? error.message
+            : "Não foi possível excluir o convênio.",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <>
       <div className="page-heading-row">
         <div>
-          <span className="eyebrow">Cadastros</span>
+          <span className="eyebrow">Configuração</span>
           <h1>Convênios</h1>
-          <p>Condições utilizadas no cálculo dos vencimentos.</p>
+          <p>Cadastre e mantenha os convênios utilizados nos faturamentos.</p>
         </div>
+        {editable ? (
+          <button className="primary-button" type="button" onClick={openNew}>
+            <Plus size={19} /> Novo convênio
+          </button>
+        ) : null}
       </div>
-      <section className="directory-grid">
-        {insurers.map((insurer) => (
-          <article className="directory-card" key={insurer.id}>
-            <span className="directory-icon">
-              <Landmark size={21} />
+
+      {data.insurers.length ? (
+        <section className="directory-grid insurer-grid">
+          {data.insurers.map((insurer) => {
+            const invoiceCount = invoiceCounts.get(insurer.id) || 0;
+            return (
+              <article className="directory-card insurer-card" key={insurer.id}>
+                <span className="directory-icon">
+                  <Landmark size={21} />
+                </span>
+                <div className="insurer-card-copy">
+                  <div className="insurer-title-line">
+                    <h2>{insurer.name}</h2>
+                    <span
+                      className={insurer.active ? "active-label" : "inactive-label"}
+                    >
+                      {insurer.active ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+                  <p>
+                    {insurer.registration_code
+                      ? `Código ${insurer.registration_code} · `
+                      : ""}
+                    Prazo de {insurer.payment_term_days} dias
+                  </p>
+                  <small>
+                    {invoiceCount} {invoiceCount === 1 ? "faturamento" : "faturamentos"}
+                  </small>
+                </div>
+                {editable ? (
+                  <div className="directory-actions">
+                    <button
+                      className="icon-button edit"
+                      type="button"
+                      onClick={() => openEdit(insurer)}
+                      aria-label={`Editar convênio ${insurer.name}`}
+                      title="Editar convênio"
+                    >
+                      <Edit3 size={17} />
+                    </button>
+                    <button
+                      className="icon-button danger"
+                      type="button"
+                      onClick={() => setDeleteInsurer(insurer)}
+                      aria-label={`Excluir convênio ${insurer.name}`}
+                      title="Excluir convênio"
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </section>
+      ) : (
+        <section className="content-card">
+          <div className="empty-state">
+            <span>
+              <Landmark size={27} />
             </span>
-            <div>
-              <h2>{insurer.name}</h2>
-              <p>Prazo de pagamento</p>
-            </div>
-            <strong>{insurer.payment_term_days} dias</strong>
-          </article>
-        ))}
-      </section>
+            <h3>Nenhum convênio cadastrado</h3>
+            <p>Use “Novo convênio” para começar.</p>
+          </div>
+        </section>
+      )}
+
+      <InsurerDialog
+        open={dialogOpen}
+        insurer={editingInsurer}
+        saving={saving}
+        onClose={() => {
+          if (!saving) {
+            setDialogOpen(false);
+            setEditingInsurer(null);
+          }
+        }}
+        onSave={saveInsurer}
+      />
+
+      <InsurerDeleteDialog
+        insurer={deleteInsurer}
+        invoiceCount={deleteInsurer ? invoiceCounts.get(deleteInsurer.id) || 0 : 0}
+        deleting={deleting}
+        onCancel={() => !deleting && setDeleteInsurer(null)}
+        onConfirm={confirmDelete}
+      />
     </>
   );
 }
@@ -1126,7 +1367,7 @@ function Dashboard({ session }: { session: Session }) {
           ) : page === "overview" ? (
             <OverviewPage data={data} />
           ) : page === "insurers" ? (
-            <InsurersPage insurers={data.insurers} />
+            <InsurersPage data={data} onReload={loadData} notify={notify} />
           ) : page === "partners" ? (
             <PartnersPage partners={data.partners} />
           ) : (
