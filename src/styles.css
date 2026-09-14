@@ -2019,3 +2019,157 @@ tbody tr:hover {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Rateio mensal */
+.rateio-metrics {
+  margin-top: 22px;
+}
+
+.rateio-partner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.rateio-partner-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #dce5e8);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(15, 47, 61, 0.06);
+}
+
+.rateio-partner-card div {
+  display: grid;
+  gap: 3px;
+}
+
+.rateio-partner-card div > span {
+  color: #172d39;
+  font-weight: 750;
+}
+
+.rateio-partner-card small {
+  color: #788c96;
+}
+
+.rateio-partner-card > strong {
+  color: #087e79;
+  font-size: 1.08rem;
+  white-space: nowrap;
+}
+
+.rateio-card {
+  margin-top: 18px;
+}
+
+.rateio-table-wrap table {
+  min-width: 1160px;
+}
+
+.rateio-table th,
+.rateio-table td {
+  white-space: nowrap;
+}
+
+.rateio-table .partner-column,
+.rateio-table .partner-value {
+  background: rgba(20, 147, 140, 0.045);
+  text-align: right;
+}
+
+.rateio-table tfoot td {
+  padding: 14px 12px;
+  background: #dff3f1;
+  color: #17313d;
+  font-weight: 800;
+  border-top: 2px solid #92cec9;
+  text-align: right;
+}
+
+.rateio-table tfoot td:first-child {
+  text-align: left;
+}
+
+.rateio-dialog {
+  width: min(780px, calc(100vw - 32px));
+}
+
+.rateio-dialog-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 13px;
+  background: #e9f6f5;
+  color: #31515f;
+}
+
+.rateio-dialog-summary strong {
+  color: #075c75;
+  font-size: 1.15rem;
+}
+
+.rateio-edit-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rateio-edit-table th,
+.rateio-edit-table td {
+  padding: 10px;
+  border-bottom: 1px solid #e2e9ec;
+  text-align: left;
+}
+
+.rateio-edit-table th {
+  color: #71858f;
+  font-size: 0.72rem;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.rateio-edit-table input {
+  width: 100%;
+  min-width: 120px;
+}
+
+.rateio-edit-total {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 14px 10px 2px;
+  color: #536b76;
+}
+
+.rateio-edit-total strong {
+  color: #087e79;
+  font-size: 1.08rem;
+}
+
+@media (max-width: 760px) {
+  .rateio-partner-card {
+    grid-template-columns: auto 1fr;
+  }
+
+  .rateio-partner-card > strong {
+    grid-column: 2;
+  }
+
+  .rateio-dialog-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .rateio-edit-table input {
+    min-width: 100px;
+  }
+}

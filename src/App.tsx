@@ -30,9 +30,14 @@ import {
   InsurerDialog,
 } from "./components/InsurerDialog";
 import { InvoiceDialog } from "./components/InvoiceDialog";
+import {
+  RateioDialog,
+  type RateioEditValues,
+} from "./components/RateioDialog";
 import { supabase } from "./lib/supabase";
 import type {
   BillingUnit,
+  Distribution,
   Insurer,
   InsurerFormValues,
   Invoice,
@@ -51,6 +56,7 @@ type AppData = {
   insurers: Insurer[];
   invoices: Invoice[];
   partners: Partner[];
+  distributions: Distribution[];
 };
 
 const monthNames = [
@@ -1162,30 +1168,474 @@ function InsurersPage({
   );
 }
 
-function PartnersPage({ partners }: { partners: Partner[] }) {
+function RateioPage({
+  data,
+  onReload,
+  notify,
+}: {
+  data: AppData;
+  onReload: () => Promise<void>;
+  notify: (type: "success" | "error", message: string) => void;
+}) {
+  const initial = currentPeriod();
+  const [year, setYear] = useState(initial.year);
+  const [month, setMonth] = useState(initial.month);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [deleteInvoice, setDeleteInvoice] = useState<Invoice | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const selectedPeriod = periodKey(year, month);
+  const insurerNames = useMemo(
+    () => new Map(data.insurers.map((insurer) => [insurer.id, insurer.name])),
+    [data.insurers],
+  );
+  const distributionsByInvoice = useMemo(() => {
+    const grouped = new Map<string, Distribution[]>();
+    data.distributions.forEach((distribution) => {
+      const current = grouped.get(distribution.invoice_id) || [];
+      current.push(distribution);
+      grouped.set(distribution.invoice_id, current);
+    });
+    return grouped;
+  }, [data.distributions]);
+  const partners = useMemo(
+    () => [...data.partners].sort((a, b) => a.sort_order - b.sort_order),
+    [data.partners],
+  );
+  const monthInvoices = useMemo(
+    () =>
+      data.invoices
+        .filter(
+          (invoice) =>
+            (invoice.status === "received" || invoice.status === "partial") &&
+            invoice.paid_at?.slice(0, 7) === selectedPeriod &&
+            distributionsByInvoice.has(invoice.id),
+        )
+        .sort((a, b) => {
+          const byDate = (b.paid_at || "").localeCompare(a.paid_at || "");
+          if (byDate) return byDate;
+          return alphabetic.compare(
+            insurerNames.get(a.insurer_id) || "",
+            insurerNames.get(b.insurer_id) || "",
+          );
+        }),
+    [data.invoices, distributionsByInvoice, insurerNames, selectedPeriod],
+  );
+
+  const totals = useMemo(() => {
+    const received = monthInvoices.reduce(
+      (sum, invoice) => sum + Number(invoice.received_amount),
+      0,
+    );
+    const distributed = monthInvoices.reduce(
+      (sum, invoice) =>
+        sum +
+        (distributionsByInvoice.get(invoice.id) || []).reduce(
+          (subtotal, item) => subtotal + Number(item.distributed_amount),
+          0,
+        ),
+      0,
+    );
+    return {
+      received,
+      distributed,
+      difference: received - distributed,
+    };
+  }, [distributionsByInvoice, monthInvoices]);
+
+  const partnerTotals = useMemo(
+    () =>
+      new Map(
+        partners.map((partner) => [
+          partner.id,
+          monthInvoices.reduce(
+            (sum, invoice) =>
+              sum +
+              Number(
+                (distributionsByInvoice.get(invoice.id) || []).find(
+                  (item) => item.partner_id === partner.id,
+                )?.distributed_amount || 0,
+              ),
+            0,
+          ),
+        ]),
+      ),
+    [distributionsByInvoice, monthInvoices, partners],
+  );
+
+  const editable = data.membership.role !== "viewer";
+
+  const downloadPdf = async () => {
+    if (!monthInvoices.length) {
+      notify("error", "Não há rateios neste mês para gerar o relatório.");
+      return;
+    }
+    setExportingPdf(true);
+    try {
+      const { downloadRateioReport } = await import("./lib/rateioReport");
+      downloadRateioReport({
+        organizationName: data.organizationName,
+        periodKey: selectedPeriod,
+        periodLabel: `${fullMonthNames[month]} de ${year}`,
+        invoices: monthInvoices,
+        insurers: data.insurers,
+        partners,
+        distributions: data.distributions,
+      });
+      notify("success", "Relatório de rateio em PDF gerado com sucesso.");
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar o relatório de rateio.",
+      );
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const saveRateio = async (values: RateioEditValues) => {
+    if (!editingInvoice) return;
+    setSaving(true);
+    try {
+      const invoiceResult = await supabase
+        .from("invoices")
+        .update({
+          paid_at: values.paid_at,
+          production_split_done: true,
+        })
+        .eq("id", editingInvoice.id);
+      if (invoiceResult.error) throw invoiceResult.error;
+
+      const updates = await Promise.all(
+        values.items.map((item) =>
+          supabase
+            .from("distributions")
+            .update({
+              share_percent: item.share_percent,
+              distributed_amount: item.distributed_amount,
+              generated_at: new Date().toISOString(),
+            })
+            .eq("id", item.id),
+        ),
+      );
+      const firstError = updates.map((result) => result.error).find(Boolean);
+      if (firstError) throw firstError;
+
+      await onReload();
+      setEditingInvoice(null);
+      notify("success", "Rateio atualizado com sucesso.");
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o rateio.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteInvoice) return;
+    setDeleting(true);
+    try {
+      const distributionResult = await supabase
+        .from("distributions")
+        .delete()
+        .eq("invoice_id", deleteInvoice.id);
+      if (distributionResult.error) throw distributionResult.error;
+
+      const invoiceResult = await supabase
+        .from("invoices")
+        .update({ production_split_done: false })
+        .eq("id", deleteInvoice.id);
+      if (invoiceResult.error) throw invoiceResult.error;
+
+      await onReload();
+      setDeleteInvoice(null);
+      notify("success", "Rateio excluído. O faturamento foi preservado.");
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir o rateio.",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <>
       <div className="page-heading-row">
         <div>
-          <span className="eyebrow">Configuração</span>
-          <h1>Sócios e rateio</h1>
-          <p>Percentuais aplicados aos faturamentos recebidos.</p>
+          <span className="eyebrow">Radiologia</span>
+          <h1>Rateio</h1>
+          <p>
+            Recebimentos baixados em {fullMonthNames[month]} de {year}.
+          </p>
         </div>
+        <button
+          className="secondary-button report-button"
+          type="button"
+          onClick={downloadPdf}
+          disabled={exportingPdf || !monthInvoices.length}
+        >
+          {exportingPdf ? (
+            <LoaderCircle className="spin" size={18} />
+          ) : (
+            <Download size={18} />
+          )}
+          Baixar relatório PDF
+        </button>
       </div>
-      <section className="directory-grid partner-grid">
-        {partners.map((partner) => (
-          <article className="partner-card" key={partner.id}>
-            <span className="avatar-circle">
-              <UserRound size={24} />
-            </span>
-            <h2>{partner.name}</h2>
-            <strong>{Number(partner.share_percent).toFixed(2)}%</strong>
-            <span className={partner.active ? "active-label" : "inactive-label"}>
-              {partner.active ? "Ativo" : "Inativo"}
-            </span>
-          </article>
-        ))}
+
+      <MonthSelector
+        year={year}
+        month={month}
+        onChange={(nextYear, nextMonth) => {
+          setYear(nextYear);
+          setMonth(nextMonth);
+        }}
+      />
+
+      <section className="metrics-grid rateio-metrics">
+        <MetricCard
+          label="Total recebido"
+          value={brl.format(totals.received)}
+          note="Baixas do mês"
+          tone="blue"
+          icon={<CircleDollarSign size={24} />}
+        />
+        <MetricCard
+          label="Total rateado"
+          value={brl.format(totals.distributed)}
+          note="Distribuído entre os sócios"
+          tone="teal"
+          icon={<UsersRound size={24} />}
+        />
+        <MetricCard
+          label="Diferença"
+          value={brl.format(totals.difference)}
+          note="Recebido menos rateado"
+          tone="gold"
+          icon={<WalletCards size={24} />}
+        />
+        <MetricCard
+          label="Baixas"
+          value={String(monthInvoices.length)}
+          note="Faturamentos no rateio"
+          tone="slate"
+          icon={<CalendarDays size={24} />}
+        />
       </section>
+
+      {partners.length ? (
+        <section className="rateio-partner-grid" aria-label="Totais por sócio">
+          {partners.map((partner) => (
+            <article className="rateio-partner-card" key={partner.id}>
+              <span className="avatar-circle">
+                <UserRound size={20} />
+              </span>
+              <div>
+                <span>{partner.name}</span>
+                <small>{Number(partner.share_percent).toFixed(2)}% padrão</small>
+              </div>
+              <strong>{brl.format(partnerTotals.get(partner.id) || 0)}</strong>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
+      <section className="content-card rateio-card">
+        <div className="card-heading">
+          <div>
+            <h2>Rateios do mês</h2>
+            <p>Organizados pela data da baixa do faturamento.</p>
+          </div>
+        </div>
+        {monthInvoices.length ? (
+          <div className="table-wrap rateio-table-wrap">
+            <table className="rateio-table">
+              <thead>
+                <tr>
+                  <th>Data da baixa</th>
+                  <th>Convênio</th>
+                  <th>Unidade</th>
+                  <th>Competência</th>
+                  <th>Valor recebido</th>
+                  {partners.map((partner) => (
+                    <th className="partner-column" key={partner.id}>
+                      {partner.name}
+                    </th>
+                  ))}
+                  <th>Total rateado</th>
+                  {editable ? <th className="actions-column">Ações</th> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {monthInvoices.map((invoice) => {
+                  const items = distributionsByInvoice.get(invoice.id) || [];
+                  const rowTotal = items.reduce(
+                    (sum, item) => sum + Number(item.distributed_amount),
+                    0,
+                  );
+                  const insurerName =
+                    insurerNames.get(invoice.insurer_id) || "Convênio";
+                  return (
+                    <tr key={invoice.id}>
+                      <td data-label="Data da baixa">
+                        {formatReceiptDate(invoice.paid_at)}
+                      </td>
+                      <td data-label="Convênio">
+                        <strong>{insurerName}</strong>
+                      </td>
+                      <td data-label="Unidade">{invoice.billing_unit}</td>
+                      <td data-label="Competência">
+                        {invoice.competence.slice(0, 7).split("-").reverse().join("/")}
+                      </td>
+                      <td data-label="Valor recebido">
+                        {brl.format(Number(invoice.received_amount))}
+                      </td>
+                      {partners.map((partner) => {
+                        const distribution = items.find(
+                          (item) => item.partner_id === partner.id,
+                        );
+                        return (
+                          <td
+                            className="partner-value"
+                            data-label={partner.name}
+                            key={partner.id}
+                          >
+                            {distribution
+                              ? brl.format(Number(distribution.distributed_amount))
+                              : "—"}
+                          </td>
+                        );
+                      })}
+                      <td data-label="Total rateado">
+                        <strong>{brl.format(rowTotal)}</strong>
+                      </td>
+                      {editable ? (
+                        <td className="row-actions" data-label="Ações">
+                          <button
+                            className="icon-button edit"
+                            type="button"
+                            onClick={() => setEditingInvoice(invoice)}
+                            aria-label={`Editar rateio de ${insurerName}`}
+                            title="Editar rateio"
+                          >
+                            <Edit3 size={17} />
+                          </button>
+                          <button
+                            className="icon-button danger"
+                            type="button"
+                            onClick={() => setDeleteInvoice(invoice)}
+                            aria-label={`Excluir rateio de ${insurerName}`}
+                            title="Excluir rateio"
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4}>TOTAL DO MÊS</td>
+                  <td>{brl.format(totals.received)}</td>
+                  {partners.map((partner) => (
+                    <td key={partner.id}>
+                      {brl.format(partnerTotals.get(partner.id) || 0)}
+                    </td>
+                  ))}
+                  <td>{brl.format(totals.distributed)}</td>
+                  {editable ? <td /> : null}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <span>
+              <UsersRound size={27} />
+            </span>
+            <h3>Nenhum rateio neste mês</h3>
+            <p>
+              Quando um faturamento for marcado como recebido, o rateio aparecerá
+              automaticamente aqui, conforme a data da baixa.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <RateioDialog
+        invoice={editingInvoice}
+        insurerName={
+          editingInvoice
+            ? insurerNames.get(editingInvoice.insurer_id) || "Convênio"
+            : ""
+        }
+        distributions={
+          editingInvoice ? distributionsByInvoice.get(editingInvoice.id) || [] : []
+        }
+        partners={partners}
+        saving={saving}
+        onClose={() => !saving && setEditingInvoice(null)}
+        onSave={saveRateio}
+      />
+
+      {deleteInvoice ? (
+        <div
+          className="dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => !deleting && setDeleteInvoice(null)}
+        >
+          <section
+            className="dialog-panel confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-rateio-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <span className="danger-icon">
+              <Trash2 size={23} />
+            </span>
+            <h2 id="delete-rateio-title">Excluir este rateio?</h2>
+            <p>
+              O rateio será removido da competência selecionada, mas o faturamento
+              e o recebimento continuarão cadastrados.
+            </p>
+            <div className="dialog-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setDeleteInvoice(null)}
+                disabled={deleting}
+              >
+                Cancelar
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+              >
+                {deleting ? <LoaderCircle className="spin" size={18} /> : null}
+                Excluir rateio
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -1226,8 +1676,14 @@ function Dashboard({ session }: { session: Session }) {
       throw new Error("Seu usuário ainda não está vinculado à organização HPOLI.");
     }
 
-    const [organizationResult, profileResult, insurersResult, invoicesResult, partnersResult] =
-      await Promise.all([
+    const [
+      organizationResult,
+      profileResult,
+      insurersResult,
+      invoicesResult,
+      partnersResult,
+      distributionsResult,
+    ] = await Promise.all([
         supabase
           .from("organizations")
           .select("name")
@@ -1253,6 +1709,11 @@ function Dashboard({ session }: { session: Session }) {
           .select("*")
           .eq("organization_id", membership.organization_id)
           .order("sort_order"),
+        supabase
+          .from("distributions")
+          .select("*")
+          .eq("organization_id", membership.organization_id)
+          .order("generated_at", { ascending: false }),
       ]);
 
     const firstError = [
@@ -1261,6 +1722,7 @@ function Dashboard({ session }: { session: Session }) {
       insurersResult.error,
       invoicesResult.error,
       partnersResult.error,
+      distributionsResult.error,
     ].find(Boolean);
     if (firstError) throw firstError;
 
@@ -1274,6 +1736,7 @@ function Dashboard({ session }: { session: Session }) {
       insurers: (insurersResult.data || []) as Insurer[],
       invoices: (invoicesResult.data || []) as Invoice[],
       partners: (partnersResult.data || []) as Partner[],
+      distributions: (distributionsResult.data || []) as Distribution[],
     });
   }, [session.user.email, session.user.id]);
 
@@ -1311,7 +1774,7 @@ function Dashboard({ session }: { session: Session }) {
     { id: "DIA", label: "Faturamento DIA", icon: <FileText size={19} /> },
     { id: "HOL", label: "Faturamento HOL", icon: <FileText size={19} /> },
     { id: "insurers", label: "Convênios", icon: <Building2 size={19} /> },
-    { id: "partners", label: "Sócios e rateio", icon: <UsersRound size={19} /> },
+    { id: "partners", label: "Rateio", icon: <UsersRound size={19} /> },
   ];
 
   if (loading) return <SplashScreen />;
@@ -1434,7 +1897,7 @@ function Dashboard({ session }: { session: Session }) {
           ) : page === "insurers" ? (
             <InsurersPage data={data} onReload={loadData} notify={notify} />
           ) : page === "partners" ? (
-            <PartnersPage partners={data.partners} />
+            <RateioPage data={data} onReload={loadData} notify={notify} />
           ) : (
             <BillingPage
               key={page}

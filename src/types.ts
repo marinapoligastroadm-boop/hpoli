@@ -42,6 +42,17 @@ export type Invoice = {
   production_split_done: boolean;
 };
 
+export type Distribution = {
+  id: string;
+  organization_id: string;
+  invoice_id: string;
+  partner_id: string;
+  base_amount: number;
+  share_percent: number;
+  distributed_amount: number;
+  generated_at: string;
+};
+
 export type Partner = {
   id: string;
   organization_id: string;
