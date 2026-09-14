@@ -91,6 +91,28 @@ export function InvoiceDialog({
     value: InvoiceFormValues[K],
   ) => setValues((current) => ({ ...current, [field]: value }));
 
+  const updateBillingAmount = (
+    field: "gross_amount" | "glosa_amount",
+    value: string,
+  ) => {
+    setValues((current) => {
+      const nextValues = { ...current, [field]: value };
+      if (invoice) return nextValues;
+
+      const calculatedPaid = Math.max(
+        0,
+        parseMoney(nextValues.gross_amount) -
+          parseMoney(nextValues.glosa_amount),
+      );
+      return {
+        ...nextValues,
+        received_amount: (
+          Math.round((calculatedPaid + Number.EPSILON) * 100) / 100
+        ).toFixed(2),
+      };
+    });
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await onSave(values);
@@ -152,7 +174,9 @@ export function InvoiceDialog({
                 min="0"
                 step="0.01"
                 value={values.gross_amount}
-                onChange={(event) => update("gross_amount", event.target.value)}
+                onChange={(event) =>
+                  updateBillingAmount("gross_amount", event.target.value)
+                }
                 placeholder="0,00"
                 required
               />
@@ -166,7 +190,9 @@ export function InvoiceDialog({
                 min="0"
                 step="0.01"
                 value={values.glosa_amount}
-                onChange={(event) => update("glosa_amount", event.target.value)}
+                onChange={(event) =>
+                  updateBillingAmount("glosa_amount", event.target.value)
+                }
               />
             </label>
 
