@@ -26,6 +26,8 @@ const formatDate = (value: string | null) =>
   value
     ? dateFormatter.format(new Date(`${value.slice(0, 10)}T12:00:00`))
     : "—";
+const formatCompetenceMonth = (value: string | null) =>
+  value ? value.slice(0, 7).split("-").reverse().join("/") : "—";
 
 export function buildRateioReport({
   organizationName,
@@ -131,10 +133,11 @@ export function buildRateioReport({
   });
 
   const head = [
+    "COMP. RATEIO",
     "DATA DA BAIXA",
     "CONVÊNIO",
     "UNIDADE",
-    "COMPETÊNCIA",
+    "COMP. FATURAMENTO",
     "VALOR RECEBIDO",
     ...sortedPartners.map((partner) => partner.name.toUpperCase()),
     "TOTAL RATEADO",
@@ -149,10 +152,11 @@ export function buildRateioReport({
         ),
     );
     return [
+      formatCompetenceMonth(invoice.rateio_competence),
       formatDate(invoice.paid_at),
       insurerNames.get(invoice.insurer_id) || "Convênio",
       invoice.billing_unit,
-      invoice.competence.slice(0, 7).split("-").reverse().join("/"),
+      formatCompetenceMonth(invoice.competence),
       money.format(Number(invoice.received_amount)),
       ...values.map((value) => money.format(value)),
       money.format(values.reduce((sum, value) => sum + value, 0)),
@@ -160,6 +164,7 @@ export function buildRateioReport({
   });
   const foot = [
     "TOTAL DO MÊS",
+    "",
     "",
     "",
     "",
@@ -203,14 +208,15 @@ export function buildRateioReport({
     },
     alternateRowStyles: { fillColor: [249, 251, 252] },
     columnStyles: {
-      0: { cellWidth: 24, halign: "center" },
-      1: { cellWidth: 48, fontStyle: "bold" },
-      2: { cellWidth: 18, halign: "center" },
-      3: { cellWidth: 23, halign: "center" },
-      4: { cellWidth: 30, halign: "right" },
+      0: { cellWidth: 21, halign: "center" },
+      1: { cellWidth: 24, halign: "center" },
+      2: { cellWidth: 42, fontStyle: "bold" },
+      3: { cellWidth: 18, halign: "center" },
+      4: { cellWidth: 23, halign: "center" },
+      5: { cellWidth: 29, halign: "right" },
     },
     didParseCell: (hookData) => {
-      if (hookData.column.index >= 5) hookData.cell.styles.halign = "right";
+      if (hookData.column.index >= 6) hookData.cell.styles.halign = "right";
     },
     willDrawPage: ({ pageNumber }) => {
       if (pageNumber === 1) return;

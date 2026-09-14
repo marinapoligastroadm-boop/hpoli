@@ -34,6 +34,7 @@ import {
   RateioDialog,
   type RateioEditValues,
 } from "./components/RateioDialog";
+import { RateioCompetenceDialog } from "./components/RateioCompetenceDialog";
 import { supabase } from "./lib/supabase";
 import type {
   BillingUnit,
@@ -113,6 +114,9 @@ const formatReceiptDate = (value: string | null) => {
   if (!value) return "—";
   return receiptDateFormatter.format(new Date(`${value.slice(0, 10)}T12:00:00`));
 };
+
+const formatCompetenceMonth = (value: string | null) =>
+  value ? value.slice(0, 7).split("-").reverse().join("/") : "Escolher mês";
 
 const today = () => {
   const current = new Date();
@@ -241,12 +245,14 @@ function InvoiceTable({
   invoices,
   insurers,
   editable,
+  onSetRateioCompetence,
   onEdit,
   onDelete,
 }: {
   invoices: Invoice[];
   insurers: Insurer[];
   editable: boolean;
+  onSetRateioCompetence: (invoice: Invoice) => void;
   onEdit: (invoice: Invoice) => void;
   onDelete: (invoice: Invoice) => void;
 }) {
@@ -304,13 +310,25 @@ function InvoiceTable({
                   {formatReceiptDate(invoice.paid_at)}
                 </td>
                 <td data-label="Rateio feito na produção">
-                  <span
-                    className={`status-pill status-${
-                      invoice.production_split_done ? "received" : "pending"
+                  <button
+                    className={`rateio-month-button${
+                      invoice.rateio_competence ? " selected" : ""
                     }`}
+                    type="button"
+                    onClick={() => onSetRateioCompetence(invoice)}
+                    disabled={!editable}
+                    aria-label={`Escolher competência do rateio de ${insurerName}`}
+                    title="Escolher competência do rateio"
                   >
-                    {invoice.production_split_done ? "Sim" : "Não"}
-                  </span>
+                    <CalendarDays size={15} aria-hidden="true" />
+                    {formatCompetenceMonth(invoice.rateio_competence)}
+                  </button>
+                  {invoice.rateio_competence &&
+                  !invoice.production_split_done ? (
+                    <small className="rateio-month-hint">
+                      Aguardando recebimento
+                    </small>
+                  ) : null}
                 </td>
                 {editable ? (
                   <td className="row-actions" data-label="Ações">
@@ -417,8 +435,10 @@ function BillingPage({
   const [status, setStatus] = useState<InvoiceStatus | "all">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  const [rateioInvoice, setRateioInvoice] = useState<Invoice | null>(null);
   const [deleteInvoice, setDeleteInvoice] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingRateioCompetence, setSavingRateioCompetence] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
 
@@ -597,6 +617,38 @@ function BillingPage({
     }
   };
 
+  const saveRateioCompetence = async (period: string | null) => {
+    if (!rateioInvoice) return;
+    setSavingRateioCompetence(true);
+    try {
+      const { error } = await supabase
+        .from("invoices")
+        .update({
+          rateio_competence: period ? `${period}-01` : null,
+        })
+        .eq("id", rateioInvoice.id);
+      if (error) throw error;
+
+      await onReload();
+      setRateioInvoice(null);
+      notify(
+        "success",
+        period
+          ? "Competência do rateio salva com sucesso."
+          : "Competência do rateio removida.",
+      );
+    } catch (error) {
+      notify(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a competência do rateio.",
+      );
+    } finally {
+      setSavingRateioCompetence(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteInvoice) return;
     setDeleting(true);
@@ -742,6 +794,7 @@ function BillingPage({
             invoices={filteredInvoices}
             insurers={data.insurers}
             editable={editable}
+            onSetRateioCompetence={setRateioInvoice}
             onEdit={openEdit}
             onDelete={setDeleteInvoice}
           />
@@ -763,6 +816,21 @@ function BillingPage({
           }
         }}
         onSave={saveInvoice}
+      />
+
+      <RateioCompetenceDialog
+        invoice={rateioInvoice}
+        insurerName={
+          rateioInvoice
+            ? insurerNames.get(rateioInvoice.insurer_id) || "Convênio"
+            : ""
+        }
+        defaultPeriod={selectedPeriod}
+        saving={savingRateioCompetence}
+        onClose={() =>
+          !savingRateioCompetence && setRateioInvoice(null)
+        }
+        onSave={saveRateioCompetence}
       />
 
       <ConfirmDialog
@@ -1210,16 +1278,15 @@ function RateioPage({
         .filter(
           (invoice) =>
             (invoice.status === "received" || invoice.status === "partial") &&
-            invoice.paid_at?.slice(0, 7) === selectedPeriod &&
+            invoice.rateio_competence?.slice(0, 7) === selectedPeriod &&
             distributionsByInvoice.has(invoice.id),
         )
         .sort((a, b) => {
-          const byDate = (b.paid_at || "").localeCompare(a.paid_at || "");
-          if (byDate) return byDate;
-          return alphabetic.compare(
+          const byInsurer = alphabetic.compare(
             insurerNames.get(a.insurer_id) || "",
             insurerNames.get(b.insurer_id) || "",
           );
+          return byInsurer || (b.paid_at || "").localeCompare(a.paid_at || "");
         }),
     [data.invoices, distributionsByInvoice, insurerNames, selectedPeriod],
   );
@@ -1304,8 +1371,7 @@ function RateioPage({
       const invoiceResult = await supabase
         .from("invoices")
         .update({
-          paid_at: values.paid_at,
-          production_split_done: true,
+          rateio_competence: `${values.rateio_competence}-01`,
         })
         .eq("id", editingInvoice.id);
       if (invoiceResult.error) throw invoiceResult.error;
@@ -1344,15 +1410,9 @@ function RateioPage({
     if (!deleteInvoice) return;
     setDeleting(true);
     try {
-      const distributionResult = await supabase
-        .from("distributions")
-        .delete()
-        .eq("invoice_id", deleteInvoice.id);
-      if (distributionResult.error) throw distributionResult.error;
-
       const invoiceResult = await supabase
         .from("invoices")
-        .update({ production_split_done: false })
+        .update({ rateio_competence: null })
         .eq("id", deleteInvoice.id);
       if (invoiceResult.error) throw invoiceResult.error;
 
@@ -1378,7 +1438,7 @@ function RateioPage({
           <span className="eyebrow">Radiologia</span>
           <h1>Rateio</h1>
           <p>
-            Recebimentos baixados em {fullMonthNames[month]} de {year}.
+            Competência de rateio: {fullMonthNames[month]} de {year}.
           </p>
         </div>
         <button
@@ -1409,7 +1469,7 @@ function RateioPage({
         <MetricCard
           label="Total recebido"
           value={brl.format(totals.received)}
-          note="Baixas do mês"
+          note="Recebimentos vinculados à competência"
           tone="blue"
           icon={<CircleDollarSign size={24} />}
         />
@@ -1428,7 +1488,7 @@ function RateioPage({
           icon={<WalletCards size={24} />}
         />
         <MetricCard
-          label="Baixas"
+          label="Rateios"
           value={String(monthInvoices.length)}
           note="Faturamentos no rateio"
           tone="slate"
@@ -1457,7 +1517,7 @@ function RateioPage({
         <div className="card-heading">
           <div>
             <h2>Rateios do mês</h2>
-            <p>Organizados pela data da baixa do faturamento.</p>
+            <p>Organizados pela competência escolhida no faturamento.</p>
           </div>
         </div>
         {monthInvoices.length ? (
@@ -1465,10 +1525,11 @@ function RateioPage({
             <table className="rateio-table">
               <thead>
                 <tr>
+                  <th>Competência do rateio</th>
                   <th>Data da baixa</th>
                   <th>Convênio</th>
                   <th>Unidade</th>
-                  <th>Competência</th>
+                  <th>Competência do faturamento</th>
                   <th>Valor recebido</th>
                   {partners.map((partner) => (
                     <th className="partner-column" key={partner.id}>
@@ -1490,6 +1551,9 @@ function RateioPage({
                     insurerNames.get(invoice.insurer_id) || "Convênio";
                   return (
                     <tr key={invoice.id}>
+                      <td data-label="Competência do rateio">
+                        {formatCompetenceMonth(invoice.rateio_competence)}
+                      </td>
                       <td data-label="Data da baixa">
                         {formatReceiptDate(invoice.paid_at)}
                       </td>
@@ -1497,8 +1561,8 @@ function RateioPage({
                         <strong>{insurerName}</strong>
                       </td>
                       <td data-label="Unidade">{invoice.billing_unit}</td>
-                      <td data-label="Competência">
-                        {invoice.competence.slice(0, 7).split("-").reverse().join("/")}
+                      <td data-label="Competência do faturamento">
+                        {formatCompetenceMonth(invoice.competence)}
                       </td>
                       <td data-label="Valor recebido">
                         {brl.format(Number(invoice.received_amount))}
@@ -1550,7 +1614,7 @@ function RateioPage({
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4}>TOTAL DO MÊS</td>
+                  <td colSpan={5}>TOTAL DO MÊS</td>
                   <td>{brl.format(totals.received)}</td>
                   {partners.map((partner) => (
                     <td key={partner.id}>
@@ -1570,8 +1634,9 @@ function RateioPage({
             </span>
             <h3>Nenhum rateio neste mês</h3>
             <p>
-              Quando um faturamento for marcado como recebido, o rateio aparecerá
-              automaticamente aqui, conforme a data da baixa.
+              Escolha a competência na coluna “Rateio feito na prod.” do
+              faturamento. Após o recebimento, o rateio aparecerá automaticamente
+              no mês selecionado.
             </p>
           </div>
         )}

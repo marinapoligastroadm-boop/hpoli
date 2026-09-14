@@ -33,6 +33,8 @@ const formatReceiptDate = (value: string | null) => {
   if (!value) return "—";
   return receiptDateFormatter.format(new Date(`${value.slice(0, 10)}T12:00:00`));
 };
+const formatCompetenceMonth = (value: string | null) =>
+  value ? value.slice(0, 7).split("-").reverse().join("/") : "—";
 
 export function buildBillingReport({
   organizationName,
@@ -143,7 +145,7 @@ export function buildBillingReport({
         "VALOR LÍQUIDO",
         "RECEBIDO",
         "DATA DE RECEBIMENTO",
-        "RATEIO",
+        "COMP. RATEIO",
       ],
     ],
     body: sortedInvoices.map((invoice) => {
@@ -158,7 +160,7 @@ export function buildBillingReport({
         money.format(Math.max(0, paid - tax)),
         receivedLabels[invoice.status],
         formatReceiptDate(invoice.paid_at),
-        invoice.production_split_done ? "Sim" : "Não",
+        formatCompetenceMonth(invoice.rateio_competence),
       ];
     }),
     foot: [

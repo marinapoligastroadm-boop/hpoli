@@ -3,7 +3,7 @@ import { Calculator, LoaderCircle, X } from "lucide-react";
 import type { Distribution, Invoice, Partner } from "../types";
 
 export type RateioEditValues = {
-  paid_at: string;
+  rateio_competence: string;
   items: Array<{
     id: string;
     share_percent: number;
@@ -44,13 +44,13 @@ export function RateioDialog({
   onClose,
   onSave,
 }: RateioDialogProps) {
-  const [paidAt, setPaidAt] = useState("");
+  const [rateioCompetence, setRateioCompetence] = useState("");
   const [rows, setRows] = useState<EditRow[]>([]);
 
   useEffect(() => {
     if (!invoice) return;
     const order = new Map(partners.map((partner, index) => [partner.id, index]));
-    setPaidAt(invoice.paid_at?.slice(0, 10) || "");
+    setRateioCompetence(invoice.rateio_competence?.slice(0, 7) || "");
     setRows(
       [...distributions]
         .sort(
@@ -112,7 +112,7 @@ export function RateioDialog({
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await onSave({
-      paid_at: paidAt,
+      rateio_competence: rateioCompetence,
       items: rows.map((row) => ({
         id: row.id,
         share_percent: parseNumber(row.share_percent),
@@ -150,11 +150,11 @@ export function RateioDialog({
         <form onSubmit={submit}>
           <div className="form-grid">
             <label className="field">
-              <span>Data da baixa</span>
+              <span>Competência do rateio</span>
               <input
-                type="date"
-                value={paidAt}
-                onChange={(event) => setPaidAt(event.target.value)}
+                type="month"
+                value={rateioCompetence}
+                onChange={(event) => setRateioCompetence(event.target.value)}
                 required
               />
             </label>

@@ -2069,6 +2069,45 @@ tbody tr:hover {
   margin-top: 18px;
 }
 
+.rateio-month-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid #cbd9de;
+  border-radius: 9px;
+  color: var(--slate-700);
+  background: #f7fafb;
+  font-size: 0.76rem;
+  font-weight: 750;
+  white-space: nowrap;
+  transition:
+    color 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.rateio-month-button:hover:not(:disabled),
+.rateio-month-button.selected {
+  color: var(--teal-700);
+  background: #e9f6f5;
+  border-color: #a9d7d3;
+}
+
+.rateio-month-button:disabled {
+  cursor: default;
+}
+
+.rateio-month-hint {
+  display: block;
+  margin-top: 5px;
+  color: #a56c14;
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
 .rateio-table-wrap table {
   min-width: 1160px;
 }
@@ -2099,6 +2138,59 @@ tbody tr:hover {
 
 .rateio-dialog {
   width: min(780px, calc(100vw - 32px));
+}
+
+.rateio-competence-dialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.rateio-competence-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-top: 18px;
+  padding: 13px 14px;
+  border: 1px solid #c9e4e1;
+  border-radius: 11px;
+  color: var(--teal-700);
+  background: #f0f9f8;
+}
+
+.rateio-competence-info svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.rateio-competence-info div {
+  display: grid;
+  gap: 4px;
+}
+
+.rateio-competence-info span {
+  color: var(--slate-600);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.rateio-competence-actions {
+  flex-wrap: wrap;
+}
+
+.dialog-action-spacer {
+  flex: 1 1 auto;
+}
+
+.danger-link-button {
+  min-height: 38px;
+  padding: 0;
+  border: 0;
+  color: var(--danger);
+  background: transparent;
+  font-weight: 750;
+}
+
+.danger-link-button:hover:not(:disabled) {
+  text-decoration: underline;
 }
 
 .rateio-dialog-summary {
@@ -2171,5 +2263,9 @@ tbody tr:hover {
 
   .rateio-edit-table input {
     min-width: 100px;
+  }
+
+  .rateio-competence-actions .danger-link-button {
+    width: 100%;
   }
 }

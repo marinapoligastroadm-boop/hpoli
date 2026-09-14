@@ -31,6 +31,7 @@ export type Invoice = {
   received_amount: number;
   status: InvoiceStatus;
   paid_at: string | null;
+  rateio_competence: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;

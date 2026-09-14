@@ -262,19 +262,6 @@ export function InvoiceDialog({
               />
             </label>
 
-            <label className="field">
-              <span>Rateio feito na produção?</span>
-              <select
-                value={values.production_split_done ? "yes" : "no"}
-                onChange={(event) =>
-                  update("production_split_done", event.target.value === "yes")
-                }
-              >
-                <option value="no">Não</option>
-                <option value="yes">Sim</option>
-              </select>
-            </label>
-
             <label className="field field-span-2">
               <span>Observações</span>
               <textarea
