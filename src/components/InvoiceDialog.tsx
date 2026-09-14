@@ -24,6 +24,7 @@ const blankForm = (): InvoiceFormValues => ({
   glosa_amount: "0",
   received_amount: "0",
   status: "pending",
+  paid_at: "",
   production_split_done: false,
   notes: "",
 });
@@ -37,6 +38,7 @@ const fromInvoice = (invoice: Invoice): InvoiceFormValues => ({
     invoice.status === "received" || invoice.status === "partial"
       ? invoice.status
       : "pending",
+  paid_at: invoice.paid_at ? invoice.paid_at.slice(0, 10) : "",
   production_split_done: invoice.production_split_done,
   notes: invoice.notes || "",
 });
@@ -46,6 +48,14 @@ const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+const todayInputValue = () => {
+  const current = new Date();
+  const local = new Date(
+    current.getTime() - current.getTimezoneOffset() * 60_000,
+  );
+  return local.toISOString().slice(0, 10);
+};
 
 const statusOptions: Array<{ value: InvoiceStatus; label: string }> = [
   { value: "pending", label: "Não" },
@@ -90,6 +100,17 @@ export function InvoiceDialog({
     field: K,
     value: InvoiceFormValues[K],
   ) => setValues((current) => ({ ...current, [field]: value }));
+
+  const updateStatus = (status: InvoiceStatus) => {
+    setValues((current) => ({
+      ...current,
+      status,
+      paid_at:
+        status === "received" || status === "partial"
+          ? current.paid_at || todayInputValue()
+          : "",
+    }));
+  };
 
   const updateBillingAmount = (
     field: "gross_amount" | "glosa_amount",
@@ -215,7 +236,7 @@ export function InvoiceDialog({
               <select
                 value={values.status}
                 onChange={(event) =>
-                  update("status", event.target.value as InvoiceStatus)
+                  updateStatus(event.target.value as InvoiceStatus)
                 }
               >
                 {statusOptions.map((option) => (
@@ -224,6 +245,21 @@ export function InvoiceDialog({
                   </option>
                 ))}
               </select>
+            </label>
+
+            <label className="field">
+              <span>Data de recebimento</span>
+              <input
+                type="date"
+                value={values.paid_at}
+                onChange={(event) => update("paid_at", event.target.value)}
+                disabled={
+                  values.status !== "received" && values.status !== "partial"
+                }
+                required={
+                  values.status === "received" || values.status === "partial"
+                }
+              />
             </label>
 
             <label className="field">

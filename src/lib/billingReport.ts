@@ -28,6 +28,11 @@ const receivedLabels: Record<InvoiceStatus, string> = {
 };
 
 const calculateTax = (paid: number) => paid * (TAX_RATE / 100);
+const receiptDateFormatter = new Intl.DateTimeFormat("pt-BR");
+const formatReceiptDate = (value: string | null) => {
+  if (!value) return "—";
+  return receiptDateFormatter.format(new Date(`${value.slice(0, 10)}T12:00:00`));
+};
 
 export function buildBillingReport({
   organizationName,
@@ -137,6 +142,7 @@ export function buildBillingReport({
         "IMPOSTO 9,15%",
         "VALOR LÍQUIDO",
         "RECEBIDO",
+        "DATA DE RECEBIMENTO",
         "RATEIO",
       ],
     ],
@@ -151,6 +157,7 @@ export function buildBillingReport({
         money.format(tax),
         money.format(Math.max(0, paid - tax)),
         receivedLabels[invoice.status],
+        formatReceiptDate(invoice.paid_at),
         invoice.production_split_done ? "Sim" : "Não",
       ];
     }),
@@ -162,6 +169,7 @@ export function buildBillingReport({
         money.format(totals.paid),
         money.format(totals.tax),
         money.format(totals.net),
+        "",
         "",
         "",
       ],
@@ -190,14 +198,15 @@ export function buildBillingReport({
     },
     alternateRowStyles: { fillColor: [249, 251, 252] },
     columnStyles: {
-      0: { cellWidth: 60, fontStyle: "bold" },
-      1: { cellWidth: 33, halign: "right" },
-      2: { cellWidth: 30, halign: "right" },
-      3: { cellWidth: 33, halign: "right" },
-      4: { cellWidth: 32, halign: "right" },
-      5: { cellWidth: 34, halign: "right" },
-      6: { cellWidth: 25, halign: "center" },
-      7: { cellWidth: 26, halign: "center" },
+      0: { cellWidth: 45, fontStyle: "bold" },
+      1: { cellWidth: 30, halign: "right" },
+      2: { cellWidth: 26, halign: "right" },
+      3: { cellWidth: 30, halign: "right" },
+      4: { cellWidth: 29, halign: "right" },
+      5: { cellWidth: 30, halign: "right" },
+      6: { cellWidth: 22, halign: "center" },
+      7: { cellWidth: 32, halign: "center" },
+      8: { cellWidth: 29, halign: "center" },
     },
     willDrawPage: ({ pageNumber }) => {
       if (pageNumber === 1) return;

@@ -102,6 +102,12 @@ const receiptLabel = (status: InvoiceStatus) => {
 const receiptStatusClass = (status: InvoiceStatus) =>
   status === "received" || status === "partial" ? status : "pending";
 
+const receiptDateFormatter = new Intl.DateTimeFormat("pt-BR");
+const formatReceiptDate = (value: string | null) => {
+  if (!value) return "—";
+  return receiptDateFormatter.format(new Date(`${value.slice(0, 10)}T12:00:00`));
+};
+
 const today = () => {
   const current = new Date();
   const local = new Date(current.getTime() - current.getTimezoneOffset() * 60_000);
@@ -255,6 +261,7 @@ function InvoiceTable({
             <th>Imposto 9,15%</th>
             <th>Valor líquido</th>
             <th>Recebido</th>
+            <th>Data de recebimento</th>
             <th>Rateio feito na prod.</th>
             {editable ? <th className="actions-column">Ações</th> : null}
           </tr>
@@ -286,6 +293,9 @@ function InvoiceTable({
                   >
                     {receiptLabel(invoice.status)}
                   </span>
+                </td>
+                <td data-label="Data de recebimento">
+                  {formatReceiptDate(invoice.paid_at)}
                 </td>
                 <td data-label="Rateio feito na produção">
                   <span
@@ -539,7 +549,7 @@ function BillingPage({
         status: values.status,
         paid_at:
           values.status === "received" || values.status === "partial"
-            ? editingInvoice?.paid_at || today()
+            ? values.paid_at || today()
             : null,
         production_split_done: values.production_split_done,
         notes: values.notes.trim() || null,

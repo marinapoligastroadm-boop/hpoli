@@ -63,6 +63,7 @@ export type InvoiceFormValues = {
   glosa_amount: string;
   received_amount: string;
   status: InvoiceStatus;
+  paid_at: string;
   production_split_done: boolean;
   notes: string;
 };
