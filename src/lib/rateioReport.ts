@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import type {
+  BillingUnit,
   Distribution,
   Insurer,
   Invoice,
@@ -9,12 +10,19 @@ import type {
 
 type RateioReportOptions = {
   organizationName: string;
+  unit: BillingUnit;
   periodKey: string;
   periodLabel: string;
   invoices: Invoice[];
   insurers: Insurer[];
   partners: Partner[];
   distributions: Distribution[];
+};
+
+const rateioUnitLabels: Record<BillingUnit, string> = {
+  HPOLI: "Rateio HPOLI",
+  HOL: "Rateio HOL",
+  DIA: "Rateio Clínica DIA",
 };
 
 const money = new Intl.NumberFormat("pt-BR", {
@@ -31,6 +39,7 @@ const formatCompetenceMonth = (value: string | null) =>
 
 export function buildRateioReport({
   organizationName,
+  unit,
   periodLabel,
   invoices,
   insurers,
@@ -80,8 +89,8 @@ export function buildRateioReport({
   );
 
   document.setProperties({
-    title: `Relatório de rateio - ${periodLabel}`,
-    subject: "Rateio mensal dos faturamentos recebidos",
+    title: `${rateioUnitLabels[unit]} - ${periodLabel}`,
+    subject: `Rateio mensal da unidade ${unit}`,
     author: organizationName,
     creator: "Sistema HPOLI",
   });
@@ -102,7 +111,7 @@ export function buildRateioReport({
   document.text("CENTRO MÉDICO", 30, 17);
   document.setFont("helvetica", "bold");
   document.setFontSize(16);
-  document.text("Rateio de Radiologia", pageWidth - 12, 12.5, {
+  document.text(rateioUnitLabels[unit], pageWidth - 12, 12.5, {
     align: "right",
   });
   document.setFont("helvetica", "normal");
@@ -225,7 +234,7 @@ export function buildRateioReport({
       document.setTextColor(255, 255, 255);
       document.setFont("helvetica", "bold");
       document.setFontSize(8);
-      document.text("HPOLI - Rateio de Radiologia", 10, 8);
+      document.text(`HPOLI - ${rateioUnitLabels[unit]}`, 10, 8);
       document.setFont("helvetica", "normal");
       document.text(periodLabel, pageWidth - 10, 8, { align: "right" });
     },
@@ -255,5 +264,7 @@ export function buildRateioReport({
 
 export function downloadRateioReport(options: RateioReportOptions) {
   const document = buildRateioReport(options);
-  document.save(`relatorio-rateio-${options.periodKey}.pdf`);
+  document.save(
+    `relatorio-rateio-${options.unit.toLowerCase()}-${options.periodKey}.pdf`,
+  );
 }

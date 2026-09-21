@@ -90,6 +90,14 @@ const fullMonthNames = [
   "Dezembro",
 ];
 
+const rateioUnitLabels: Record<BillingUnit, string> = {
+  HPOLI: "Rateio HPOLI",
+  HOL: "Rateio HOL",
+  DIA: "Rateio Clínica DIA",
+};
+
+const rateioUnits: BillingUnit[] = ["HPOLI", "HOL", "DIA"];
+
 const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -1248,6 +1256,7 @@ function RateioPage({
   const initial = currentPeriod();
   const [year, setYear] = useState(initial.year);
   const [month, setMonth] = useState(initial.month);
+  const [selectedUnit, setSelectedUnit] = useState<BillingUnit>("HPOLI");
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [deleteInvoice, setDeleteInvoice] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
@@ -1277,6 +1286,7 @@ function RateioPage({
       data.invoices
         .filter(
           (invoice) =>
+            invoice.billing_unit === selectedUnit &&
             (invoice.status === "received" || invoice.status === "partial") &&
             invoice.rateio_competence?.slice(0, 7) === selectedPeriod &&
             distributionsByInvoice.has(invoice.id),
@@ -1288,7 +1298,13 @@ function RateioPage({
           );
           return byInsurer || (b.paid_at || "").localeCompare(a.paid_at || "");
         }),
-    [data.invoices, distributionsByInvoice, insurerNames, selectedPeriod],
+    [
+      data.invoices,
+      distributionsByInvoice,
+      insurerNames,
+      selectedPeriod,
+      selectedUnit,
+    ],
   );
 
   const totals = useMemo(() => {
@@ -1344,6 +1360,7 @@ function RateioPage({
       const { downloadRateioReport } = await import("./lib/rateioReport");
       downloadRateioReport({
         organizationName: data.organizationName,
+        unit: selectedUnit,
         periodKey: selectedPeriod,
         periodLabel: `${fullMonthNames[month]} de ${year}`,
         invoices: monthInvoices,
@@ -1435,8 +1452,8 @@ function RateioPage({
     <>
       <div className="page-heading-row">
         <div>
-          <span className="eyebrow">Radiologia</span>
-          <h1>Rateio</h1>
+          <span className="eyebrow">Rateio por unidade</span>
+          <h1>{rateioUnitLabels[selectedUnit]}</h1>
           <p>
             Competência de rateio: {fullMonthNames[month]} de {year}.
           </p>
@@ -1454,6 +1471,25 @@ function RateioPage({
           )}
           Baixar relatório PDF
         </button>
+      </div>
+
+      <div
+        className="rateio-unit-tabs"
+        role="tablist"
+        aria-label="Selecionar unidade do rateio"
+      >
+        {rateioUnits.map((unit) => (
+          <button
+            key={unit}
+            type="button"
+            role="tab"
+            aria-selected={selectedUnit === unit}
+            className={selectedUnit === unit ? "active" : ""}
+            onClick={() => setSelectedUnit(unit)}
+          >
+            {rateioUnitLabels[unit]}
+          </button>
+        ))}
       </div>
 
       <MonthSelector
@@ -1516,7 +1552,7 @@ function RateioPage({
       <section className="content-card rateio-card">
         <div className="card-heading">
           <div>
-            <h2>Rateios do mês</h2>
+            <h2>{rateioUnitLabels[selectedUnit]} do mês</h2>
             <p>Organizados pela competência escolhida no faturamento.</p>
           </div>
         </div>
@@ -1635,8 +1671,8 @@ function RateioPage({
             <h3>Nenhum rateio neste mês</h3>
             <p>
               Escolha a competência na coluna “Rateio feito na prod.” do
-              faturamento. Após o recebimento, o rateio aparecerá automaticamente
-              no mês selecionado.
+              Faturamento {selectedUnit}. Após o recebimento, o rateio aparecerá
+              automaticamente neste mês.
             </p>
           </div>
         )}

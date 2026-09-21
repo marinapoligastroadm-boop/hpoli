@@ -2022,8 +2022,46 @@ tbody tr:hover {
 
 
 /* Rateio mensal */
+.rateio-unit-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 7px;
+  margin: 22px 0 14px;
+  border: 1px solid var(--slate-200);
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 6px 20px rgba(15, 47, 61, 0.05);
+}
+
+.rateio-unit-tabs button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--slate-600);
+  background: transparent;
+  font-size: 0.86rem;
+  font-weight: 750;
+  transition:
+    color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.rateio-unit-tabs button:hover:not(.active) {
+  color: var(--navy-800);
+  background: var(--slate-100);
+}
+
+.rateio-unit-tabs button.active {
+  color: white;
+  background: var(--navy-800);
+  box-shadow: 0 6px 16px rgba(11, 79, 108, 0.2);
+}
+
 .rateio-metrics {
-  margin-top: 22px;
+  margin-top: 18px;
 }
 
 .rateio-partner-grid {
@@ -2248,6 +2286,10 @@ tbody tr:hover {
 }
 
 @media (max-width: 760px) {
+  .rateio-unit-tabs {
+    grid-template-columns: 1fr;
+  }
+
   .rateio-partner-card {
     grid-template-columns: auto 1fr;
   }
