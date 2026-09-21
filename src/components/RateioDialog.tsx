@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Calculator, LoaderCircle, X } from "lucide-react";
 import type { Distribution, Invoice, Partner } from "../types";
+import { calculateRateioBase } from "../lib/rateioCalculations";
 
 export type RateioEditValues = {
   rateio_competence: string;
@@ -83,7 +84,10 @@ export function RateioDialog({
   if (!invoice) return null;
 
   const updatePercent = (id: string, value: string) => {
-    const base = Number(invoice.received_amount);
+    const base = calculateRateioBase(
+      invoice.billing_unit,
+      Number(invoice.received_amount),
+    );
     setRows((current) =>
       current.map((row) =>
         row.id === id
@@ -161,8 +165,19 @@ export function RateioDialog({
           </div>
 
           <div className="rateio-dialog-summary">
-            <span>Valor recebido do faturamento</span>
-            <strong>{brl.format(Number(invoice.received_amount))}</strong>
+            <span>
+              {invoice.billing_unit === "HOL"
+                ? "Valor para ratear após deduções HOL"
+                : "Valor recebido do faturamento"}
+            </span>
+            <strong>
+              {brl.format(
+                calculateRateioBase(
+                  invoice.billing_unit,
+                  Number(invoice.received_amount),
+                ),
+              )}
+            </strong>
           </div>
 
           <div className="table-wrap">

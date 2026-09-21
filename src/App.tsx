@@ -35,6 +35,10 @@ import {
   type RateioEditValues,
 } from "./components/RateioDialog";
 import { RateioCompetenceDialog } from "./components/RateioCompetenceDialog";
+import {
+  calculateHolRateio,
+  calculateRateioBase,
+} from "./lib/rateioCalculations";
 import { supabase } from "./lib/supabase";
 import type {
   BillingUnit,
@@ -1312,6 +1316,15 @@ function RateioPage({
       (sum, invoice) => sum + Number(invoice.received_amount),
       0,
     );
+    const rateioBase = monthInvoices.reduce(
+      (sum, invoice) =>
+        sum +
+        calculateRateioBase(
+          invoice.billing_unit,
+          Number(invoice.received_amount),
+        ),
+      0,
+    );
     const distributed = monthInvoices.reduce(
       (sum, invoice) =>
         sum +
@@ -1323,10 +1336,46 @@ function RateioPage({
     );
     return {
       received,
+      rateioBase,
+      deductions: received - rateioBase,
       distributed,
-      difference: received - distributed,
+      difference: rateioBase - distributed,
     };
   }, [distributionsByInvoice, monthInvoices]);
+
+  const holTaxTotals = useMemo(
+    () =>
+      monthInvoices.reduce(
+        (totals, invoice) => {
+          const calculation = calculateHolRateio(
+            Number(invoice.received_amount),
+          );
+          return {
+            iss: totals.iss + calculation.iss,
+            irrf: totals.irrf + calculation.irrf,
+            depositedAmount:
+              totals.depositedAmount + calculation.depositedAmount,
+            pis: totals.pis + calculation.pis,
+            cofins: totals.cofins + calculation.cofins,
+            csll: totals.csll + calculation.csll,
+            ir: totals.ir + calculation.ir,
+            poligastroTaxTotal:
+              totals.poligastroTaxTotal + calculation.poligastroTaxTotal,
+          };
+        },
+        {
+          iss: 0,
+          irrf: 0,
+          depositedAmount: 0,
+          pis: 0,
+          cofins: 0,
+          csll: 0,
+          ir: 0,
+          poligastroTaxTotal: 0,
+        },
+      ),
+    [monthInvoices],
+  );
 
   const partnerTotals = useMemo(
     () =>
@@ -1503,34 +1552,106 @@ function RateioPage({
 
       <section className="metrics-grid rateio-metrics">
         <MetricCard
-          label="Total recebido"
+          label={selectedUnit === "HOL" ? "Valor-base HOL" : "Total recebido"}
           value={brl.format(totals.received)}
-          note="Recebimentos vinculados à competência"
+          note={
+            selectedUnit === "HOL"
+              ? "Base antes das deduções"
+              : "Recebimentos vinculados à competência"
+          }
           tone="blue"
           icon={<CircleDollarSign size={24} />}
         />
         <MetricCard
-          label="Total rateado"
-          value={brl.format(totals.distributed)}
-          note="Distribuído entre os sócios"
-          tone="teal"
-          icon={<UsersRound size={24} />}
+          label={selectedUnit === "HOL" ? "Deduções fiscais" : "Total rateado"}
+          value={brl.format(
+            selectedUnit === "HOL" ? totals.deductions : totals.distributed,
+          )}
+          note={
+            selectedUnit === "HOL"
+              ? "11,93% sobre o valor-base"
+              : "Distribuído entre os sócios"
+          }
+          tone={selectedUnit === "HOL" ? "gold" : "teal"}
+          icon={
+            selectedUnit === "HOL" ? (
+              <WalletCards size={24} />
+            ) : (
+              <UsersRound size={24} />
+            )
+          }
         />
         <MetricCard
-          label="Diferença"
-          value={brl.format(totals.difference)}
-          note="Recebido menos rateado"
-          tone="gold"
-          icon={<WalletCards size={24} />}
+          label={selectedUnit === "HOL" ? "Valor para ratear" : "Diferença"}
+          value={brl.format(
+            selectedUnit === "HOL" ? totals.rateioBase : totals.difference,
+          )}
+          note={
+            selectedUnit === "HOL"
+              ? "88,07% após os impostos"
+              : "Recebido menos rateado"
+          }
+          tone={selectedUnit === "HOL" ? "teal" : "gold"}
+          icon={
+            selectedUnit === "HOL" ? (
+              <UsersRound size={24} />
+            ) : (
+              <WalletCards size={24} />
+            )
+          }
         />
         <MetricCard
-          label="Rateios"
-          value={String(monthInvoices.length)}
-          note="Faturamentos no rateio"
+          label={selectedUnit === "HOL" ? "Total rateado" : "Rateios"}
+          value={
+            selectedUnit === "HOL"
+              ? brl.format(totals.distributed)
+              : String(monthInvoices.length)
+          }
+          note={
+            selectedUnit === "HOL"
+              ? `${monthInvoices.length} faturamento(s) no rateio`
+              : "Faturamentos no rateio"
+          }
           tone="slate"
           icon={<CalendarDays size={24} />}
         />
       </section>
+
+      {selectedUnit === "HOL" && monthInvoices.length ? (
+        <section className="hol-tax-card" aria-label="Deduções de impostos HOL">
+          <div className="hol-tax-heading">
+            <div>
+              <span className="eyebrow">Cálculo conforme demonstrativo HOL</span>
+              <h2>Deduções de impostos</h2>
+            </div>
+            <strong>Total: {brl.format(totals.deductions)}</strong>
+          </div>
+          <div className="hol-tax-groups">
+            <div>
+              <h3>Descontos retidos</h3>
+              <dl>
+                <div><dt>ISS 3%</dt><dd>{brl.format(holTaxTotals.iss)}</dd></div>
+                <div><dt>IRRF 1,5%</dt><dd>{brl.format(holTaxTotals.irrf)}</dd></div>
+                <div className="tax-subtotal"><dt>Valor depositado</dt><dd>{brl.format(holTaxTotals.depositedAmount)}</dd></div>
+              </dl>
+            </div>
+            <div>
+              <h3>Impostos pagos pela Poligastro</h3>
+              <dl>
+                <div><dt>PIS 0,65%</dt><dd>{brl.format(holTaxTotals.pis)}</dd></div>
+                <div><dt>COFINS 3%</dt><dd>{brl.format(holTaxTotals.cofins)}</dd></div>
+                <div><dt>CSLL 1%</dt><dd>{brl.format(holTaxTotals.csll)}</dd></div>
+                <div><dt>IR 2,78%</dt><dd>{brl.format(holTaxTotals.ir)}</dd></div>
+                <div className="tax-subtotal"><dt>Total</dt><dd>{brl.format(holTaxTotals.poligastroTaxTotal)}</dd></div>
+              </dl>
+            </div>
+          </div>
+          <div className="hol-rateio-result">
+            <span>Valor para ratear após todas as deduções</span>
+            <strong>{brl.format(totals.rateioBase)}</strong>
+          </div>
+        </section>
+      ) : null}
 
       {partners.length ? (
         <section className="rateio-partner-grid" aria-label="Totais por sócio">
@@ -1558,7 +1679,11 @@ function RateioPage({
         </div>
         {monthInvoices.length ? (
           <div className="table-wrap rateio-table-wrap">
-            <table className="rateio-table">
+            <table
+              className={`rateio-table${
+                selectedUnit === "HOL" ? " hol-rateio-table" : ""
+              }`}
+            >
               <thead>
                 <tr>
                   <th>Competência do rateio</th>
@@ -1566,7 +1691,13 @@ function RateioPage({
                   <th>Convênio</th>
                   <th>Unidade</th>
                   <th>Competência do faturamento</th>
-                  <th>Valor recebido</th>
+                  <th>{selectedUnit === "HOL" ? "Valor-base" : "Valor recebido"}</th>
+                  {selectedUnit === "HOL" ? (
+                    <>
+                      <th>Deduções 11,93%</th>
+                      <th>Valor para ratear</th>
+                    </>
+                  ) : null}
                   {partners.map((partner) => (
                     <th className="partner-column" key={partner.id}>
                       {partner.name}
@@ -1579,6 +1710,9 @@ function RateioPage({
               <tbody>
                 {monthInvoices.map((invoice) => {
                   const items = distributionsByInvoice.get(invoice.id) || [];
+                  const holCalculation = calculateHolRateio(
+                    Number(invoice.received_amount),
+                  );
                   const rowTotal = items.reduce(
                     (sum, item) => sum + Number(item.distributed_amount),
                     0,
@@ -1600,9 +1734,19 @@ function RateioPage({
                       <td data-label="Competência do faturamento">
                         {formatCompetenceMonth(invoice.competence)}
                       </td>
-                      <td data-label="Valor recebido">
+                      <td data-label={selectedUnit === "HOL" ? "Valor-base" : "Valor recebido"}>
                         {brl.format(Number(invoice.received_amount))}
                       </td>
+                      {selectedUnit === "HOL" ? (
+                        <>
+                          <td data-label="Deduções 11,93%">
+                            {brl.format(holCalculation.totalDeductions)}
+                          </td>
+                          <td data-label="Valor para ratear">
+                            <strong>{brl.format(holCalculation.rateioBase)}</strong>
+                          </td>
+                        </>
+                      ) : null}
                       {partners.map((partner) => {
                         const distribution = items.find(
                           (item) => item.partner_id === partner.id,
@@ -1652,6 +1796,12 @@ function RateioPage({
                 <tr>
                   <td colSpan={5}>TOTAL DO MÊS</td>
                   <td>{brl.format(totals.received)}</td>
+                  {selectedUnit === "HOL" ? (
+                    <>
+                      <td>{brl.format(totals.deductions)}</td>
+                      <td>{brl.format(totals.rateioBase)}</td>
+                    </>
+                  ) : null}
                   {partners.map((partner) => (
                     <td key={partner.id}>
                       {brl.format(partnerTotals.get(partner.id) || 0)}

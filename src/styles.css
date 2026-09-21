@@ -2103,6 +2103,108 @@ tbody tr:hover {
   white-space: nowrap;
 }
 
+.hol-tax-card {
+  margin: 18px 0;
+  padding: 20px;
+  border: 1px solid #cbdde4;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(15, 47, 61, 0.06);
+}
+
+.hol-tax-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.hol-tax-heading h2 {
+  margin-top: 4px;
+  color: var(--slate-900);
+  font-size: 1.12rem;
+}
+
+.hol-tax-heading > strong {
+  color: #a56c14;
+  font-size: 1.05rem;
+  white-space: nowrap;
+}
+
+.hol-tax-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 28px;
+  padding: 18px 0;
+}
+
+.hol-tax-groups h3 {
+  margin-bottom: 10px;
+  color: var(--navy-800);
+  font-size: 0.82rem;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.hol-tax-groups dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.hol-tax-groups dl > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #f7fafb;
+}
+
+.hol-tax-groups dt {
+  color: var(--slate-600);
+  font-size: 0.78rem;
+}
+
+.hol-tax-groups dd {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 0.8rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.hol-tax-groups .tax-subtotal {
+  color: var(--navy-800);
+  background: #eaf3f7;
+}
+
+.hol-tax-groups .tax-subtotal dt,
+.hol-tax-groups .tax-subtotal dd {
+  color: inherit;
+  font-weight: 800;
+}
+
+.hol-rateio-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 16px;
+  border-radius: 11px;
+  color: #075c75;
+  background: #dff3f1;
+  font-weight: 750;
+}
+
+.hol-rateio-result strong {
+  font-size: 1.18rem;
+  white-space: nowrap;
+}
+
 .rateio-card {
   margin-top: 18px;
 }
@@ -2148,6 +2250,10 @@ tbody tr:hover {
 
 .rateio-table-wrap table {
   min-width: 1160px;
+}
+
+.rateio-table-wrap table.hol-rateio-table {
+  min-width: 1360px;
 }
 
 .rateio-table th,
@@ -2288,6 +2394,17 @@ tbody tr:hover {
 @media (max-width: 760px) {
   .rateio-unit-tabs {
     grid-template-columns: 1fr;
+  }
+
+  .hol-tax-heading,
+  .hol-rateio-result {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .hol-tax-groups {
+    grid-template-columns: 1fr;
+    gap: 18px;
   }
 
   .rateio-partner-card {
