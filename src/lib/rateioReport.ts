@@ -78,6 +78,7 @@ export function buildRateioReport({
       calculateRateioBase(
         invoice.billing_unit,
         Number(invoice.received_amount),
+        Number(invoice.tax_rate),
       ),
     0,
   );
@@ -164,9 +165,9 @@ export function buildRateioReport({
         ["VALOR PARA RATEAR", totalRateioBase, [10, 122, 117]],
       ] as const)
     : ([
-        ["TOTAL RECEBIDO", totalReceived, [17, 105, 138]],
-        ["TOTAL RATEADO", totalDistributed, [10, 122, 117]],
-        ["DIFERENÇA", totalReceived - totalDistributed, [194, 129, 36]],
+        ["VALOR PAGO", totalReceived, [17, 105, 138]],
+        ["IMPOSTOS", totalDeductions, [194, 129, 36]],
+        ["VALOR LÍQUIDO", totalRateioBase, [10, 122, 117]],
       ] as const);
   const cardGap = 5;
   const cardWidth = (pageWidth - 24 - cardGap * 2) / 3;
@@ -208,8 +209,9 @@ export function buildRateioReport({
     "CONVÊNIO",
     "UNIDADE",
     "COMP. FATURAMENTO",
-    isHol ? "VALOR-BASE" : "VALOR RECEBIDO",
-    ...(isHol ? ["DEDUÇÕES 11,93%", "VALOR P/ RATEAR"] : []),
+    isHol ? "VALOR-BASE" : "VALOR PAGO",
+    isHol ? "DEDUÇÕES 11,93%" : "IMPOSTO",
+    isHol ? "VALOR P/ RATEAR" : "VALOR LÍQUIDO",
     ...sortedPartners.map((partner) => partner.name.toUpperCase()),
     "TOTAL RATEADO",
   ];
@@ -218,6 +220,12 @@ export function buildRateioReport({
     const holCalculation = calculateHolRateio(
       Number(invoice.received_amount),
     );
+    const rateioBase = calculateRateioBase(
+      invoice.billing_unit,
+      Number(invoice.received_amount),
+      Number(invoice.tax_rate),
+    );
+    const rateioDeduction = Number(invoice.received_amount) - rateioBase;
     const values = sortedPartners.map(
       (partner) =>
         Number(
@@ -232,12 +240,10 @@ export function buildRateioReport({
       invoice.billing_unit,
       formatCompetenceMonth(invoice.competence),
       money.format(Number(invoice.received_amount)),
-      ...(isHol
-        ? [
-            money.format(holCalculation.totalDeductions),
-            money.format(holCalculation.rateioBase),
-          ]
-        : []),
+      money.format(
+        isHol ? holCalculation.totalDeductions : rateioDeduction,
+      ),
+      money.format(isHol ? holCalculation.rateioBase : rateioBase),
       ...values.map((value) => money.format(value)),
       money.format(values.reduce((sum, value) => sum + value, 0)),
     ];
@@ -249,9 +255,8 @@ export function buildRateioReport({
     "",
     "",
     money.format(totalReceived),
-    ...(isHol
-      ? [money.format(totalDeductions), money.format(totalRateioBase)]
-      : []),
+    money.format(totalDeductions),
+    money.format(totalRateioBase),
     ...sortedPartners.map((partner) =>
       money.format(partnerTotals.get(partner.id) || 0),
     ),
@@ -296,16 +301,12 @@ export function buildRateioReport({
       2: { cellWidth: 42, fontStyle: "bold" },
       3: { cellWidth: 18, halign: "center" },
       4: { cellWidth: 23, halign: "center" },
-      5: { cellWidth: isHol ? 24 : 29, halign: "right" },
-      ...(isHol
-        ? {
-            6: { cellWidth: 24, halign: "right" as const },
-            7: { cellWidth: 25, halign: "right" as const },
-          }
-        : {}),
+      5: { cellWidth: 24, halign: "right" },
+      6: { cellWidth: 24, halign: "right" },
+      7: { cellWidth: 25, halign: "right" },
     },
     didParseCell: (hookData) => {
-      if (hookData.column.index >= (isHol ? 8 : 6)) {
+      if (hookData.column.index >= 8) {
         hookData.cell.styles.halign = "right";
       }
     },

@@ -87,6 +87,7 @@ export function RateioDialog({
     const base = calculateRateioBase(
       invoice.billing_unit,
       Number(invoice.received_amount),
+      Number(invoice.tax_rate),
     );
     setRows((current) =>
       current.map((row) =>
@@ -167,14 +168,15 @@ export function RateioDialog({
           <div className="rateio-dialog-summary">
             <span>
               {invoice.billing_unit === "HOL"
-                ? "Valor para ratear após deduções HOL"
-                : "Valor recebido do faturamento"}
+                ? "Valor líquido após deduções HOL"
+                : "Valor líquido (valor pago − imposto)"}
             </span>
             <strong>
               {brl.format(
                 calculateRateioBase(
                   invoice.billing_unit,
                   Number(invoice.received_amount),
+                  Number(invoice.tax_rate),
                 ),
               )}
             </strong>

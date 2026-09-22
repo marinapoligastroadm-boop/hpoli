@@ -1335,6 +1335,7 @@ function RateioPage({
         calculateRateioBase(
           invoice.billing_unit,
           Number(invoice.received_amount),
+          Number(invoice.tax_rate),
         ),
       0,
     );
@@ -1565,65 +1566,45 @@ function RateioPage({
 
       <section className="metrics-grid rateio-metrics">
         <MetricCard
-          label={selectedUnit === "HOL" ? "Valor-base HOL" : "Total recebido"}
+          label={selectedUnit === "HOL" ? "Valor-base HOL" : "Valor pago"}
           value={brl.format(totals.received)}
           note={
             selectedUnit === "HOL"
               ? "Base antes das deduções"
-              : "Recebimentos vinculados à competência"
+              : "Produção menos glosa"
           }
           tone="blue"
           icon={<CircleDollarSign size={24} />}
         />
         <MetricCard
-          label={selectedUnit === "HOL" ? "Deduções fiscais" : "Total rateado"}
-          value={brl.format(
-            selectedUnit === "HOL" ? totals.deductions : totals.distributed,
-          )}
+          label={selectedUnit === "HOL" ? "Deduções fiscais" : "Impostos"}
+          value={brl.format(totals.deductions)}
           note={
             selectedUnit === "HOL"
               ? "11,93% sobre o valor-base"
-              : "Distribuído entre os sócios"
+              : "Descontados antes do rateio"
           }
-          tone={selectedUnit === "HOL" ? "gold" : "teal"}
-          icon={
-            selectedUnit === "HOL" ? (
-              <WalletCards size={24} />
-            ) : (
-              <UsersRound size={24} />
-            )
-          }
+          tone="gold"
+          icon={<WalletCards size={24} />}
         />
         <MetricCard
-          label={selectedUnit === "HOL" ? "Valor para ratear" : "Diferença"}
-          value={brl.format(
-            selectedUnit === "HOL" ? totals.rateioBase : totals.difference,
-          )}
+          label={selectedUnit === "HOL" ? "Valor para ratear" : "Valor líquido"}
+          value={brl.format(totals.rateioBase)}
           note={
             selectedUnit === "HOL"
               ? "88,07% após os impostos"
-              : "Recebido menos rateado"
+              : "Base disponível para o rateio"
           }
-          tone={selectedUnit === "HOL" ? "teal" : "gold"}
-          icon={
-            selectedUnit === "HOL" ? (
-              <UsersRound size={24} />
-            ) : (
-              <WalletCards size={24} />
-            )
-          }
+          tone="teal"
+          icon={<UsersRound size={24} />}
         />
         <MetricCard
-          label={selectedUnit === "HOL" ? "Total rateado" : "Rateios"}
-          value={
-            selectedUnit === "HOL"
-              ? brl.format(totals.distributed)
-              : String(monthInvoices.length)
-          }
+          label="Total rateado"
+          value={brl.format(totals.distributed)}
           note={
-            selectedUnit === "HOL"
+            Math.abs(totals.difference) < 0.01
               ? `${monthInvoices.length} faturamento(s) no rateio`
-              : "Faturamentos no rateio"
+              : `Diferença de ${brl.format(totals.difference)}`
           }
           tone="slate"
           icon={<CalendarDays size={24} />}
@@ -1704,13 +1685,9 @@ function RateioPage({
                   <th>Convênio</th>
                   <th>Unidade</th>
                   <th>Competência do faturamento</th>
-                  <th>{selectedUnit === "HOL" ? "Valor-base" : "Valor recebido"}</th>
-                  {selectedUnit === "HOL" ? (
-                    <>
-                      <th>Deduções 11,93%</th>
-                      <th>Valor para ratear</th>
-                    </>
-                  ) : null}
+                  <th>{selectedUnit === "HOL" ? "Valor-base" : "Valor pago"}</th>
+                  <th>{selectedUnit === "HOL" ? "Deduções 11,93%" : "Imposto"}</th>
+                  <th>{selectedUnit === "HOL" ? "Valor para ratear" : "Valor líquido para rateio"}</th>
                   {partners.map((partner) => (
                     <th className="partner-column" key={partner.id}>
                       {partner.name}
@@ -1726,6 +1703,13 @@ function RateioPage({
                   const holCalculation = calculateHolRateio(
                     Number(invoice.received_amount),
                   );
+                  const rateioBase = calculateRateioBase(
+                    invoice.billing_unit,
+                    Number(invoice.received_amount),
+                    Number(invoice.tax_rate),
+                  );
+                  const rateioDeduction =
+                    Number(invoice.received_amount) - rateioBase;
                   const rowTotal = items.reduce(
                     (sum, item) => sum + Number(item.distributed_amount),
                     0,
@@ -1747,19 +1731,25 @@ function RateioPage({
                       <td data-label="Competência do faturamento">
                         {formatCompetenceMonth(invoice.competence)}
                       </td>
-                      <td data-label={selectedUnit === "HOL" ? "Valor-base" : "Valor recebido"}>
+                      <td data-label={selectedUnit === "HOL" ? "Valor-base" : "Valor pago"}>
                         {brl.format(Number(invoice.received_amount))}
                       </td>
-                      {selectedUnit === "HOL" ? (
-                        <>
-                          <td data-label="Deduções 11,93%">
-                            {brl.format(holCalculation.totalDeductions)}
-                          </td>
-                          <td data-label="Valor para ratear">
-                            <strong>{brl.format(holCalculation.rateioBase)}</strong>
-                          </td>
-                        </>
-                      ) : null}
+                      <td data-label={selectedUnit === "HOL" ? "Deduções 11,93%" : "Imposto"}>
+                        {brl.format(
+                          selectedUnit === "HOL"
+                            ? holCalculation.totalDeductions
+                            : rateioDeduction,
+                        )}
+                      </td>
+                      <td data-label={selectedUnit === "HOL" ? "Valor para ratear" : "Valor líquido para rateio"}>
+                        <strong>
+                          {brl.format(
+                            selectedUnit === "HOL"
+                              ? holCalculation.rateioBase
+                              : rateioBase,
+                          )}
+                        </strong>
+                      </td>
                       {partners.map((partner) => {
                         const distribution = items.find(
                           (item) => item.partner_id === partner.id,
@@ -1809,12 +1799,8 @@ function RateioPage({
                 <tr>
                   <td colSpan={5}>TOTAL DO MÊS</td>
                   <td>{brl.format(totals.received)}</td>
-                  {selectedUnit === "HOL" ? (
-                    <>
-                      <td>{brl.format(totals.deductions)}</td>
-                      <td>{brl.format(totals.rateioBase)}</td>
-                    </>
-                  ) : null}
+                  <td>{brl.format(totals.deductions)}</td>
+                  <td>{brl.format(totals.rateioBase)}</td>
                   {partners.map((partner) => (
                     <td key={partner.id}>
                       {brl.format(partnerTotals.get(partner.id) || 0)}

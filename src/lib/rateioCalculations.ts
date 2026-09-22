@@ -1,4 +1,5 @@
 import type { BillingUnit } from "../types";
+import { calculateNetPaidAmount } from "./taxCalculations";
 
 export const HOL_TAX_RATES = {
   iss: 0.03,
@@ -54,7 +55,13 @@ export const calculateHolRateio = (baseAmount: number) => {
 export const calculateRateioBase = (
   unit: BillingUnit,
   receivedAmount: number,
+  taxRate: number,
 ) =>
   unit === "HOL"
     ? calculateHolRateio(receivedAmount).rateioBase
-    : Number(receivedAmount) || 0;
+    : roundCurrency(
+        calculateNetPaidAmount(
+          Number(receivedAmount) || 0,
+          Number(taxRate) || 0,
+        ),
+      );
