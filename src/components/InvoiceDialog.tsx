@@ -118,8 +118,6 @@ export function InvoiceDialog({
   ) => {
     setValues((current) => {
       const nextValues = { ...current, [field]: value };
-      if (invoice) return nextValues;
-
       const calculatedPaid = Math.max(
         0,
         parseMoney(nextValues.gross_amount) -
