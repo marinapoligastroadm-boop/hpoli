@@ -2256,6 +2256,10 @@ tbody tr:hover {
   min-width: 1360px;
 }
 
+.rateio-table-wrap table.hpoli-rateio-table {
+  min-width: 1560px;
+}
+
 .rateio-table th,
 .rateio-table td {
   white-space: nowrap;

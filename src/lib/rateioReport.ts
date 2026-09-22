@@ -33,6 +33,7 @@ const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+const alphabetic = new Intl.Collator("pt-BR", { sensitivity: "base" });
 const dateFormatter = new Intl.DateTimeFormat("pt-BR");
 const formatDate = (value: string | null) =>
   value
@@ -59,6 +60,22 @@ export function buildRateioReport({
   const insurerNames = new Map(
     insurers.map((insurer) => [insurer.id, insurer.name]),
   );
+  const isHol = unit === "HOL";
+  const isHpoli = unit === "HPOLI";
+  const reportInvoices = isHpoli
+    ? [...invoices].sort((a, b) => {
+        const byCompetence = a.competence.localeCompare(b.competence);
+        const byInsurer = alphabetic.compare(
+          insurerNames.get(a.insurer_id) || "",
+          insurerNames.get(b.insurer_id) || "",
+        );
+        return (
+          byCompetence ||
+          byInsurer ||
+          (b.paid_at || "").localeCompare(a.paid_at || "")
+        );
+      })
+    : invoices;
   const grouped = new Map<string, Distribution[]>();
   distributions.forEach((distribution) => {
     const current = grouped.get(distribution.invoice_id) || [];
@@ -68,11 +85,19 @@ export function buildRateioReport({
   const sortedPartners = [...partners].sort(
     (a, b) => a.sort_order - b.sort_order,
   );
-  const totalReceived = invoices.reduce(
+  const totalProduction = reportInvoices.reduce(
+    (sum, invoice) => sum + Number(invoice.gross_amount),
+    0,
+  );
+  const totalGlosa = reportInvoices.reduce(
+    (sum, invoice) => sum + Number(invoice.glosa_amount),
+    0,
+  );
+  const totalReceived = reportInvoices.reduce(
     (sum, invoice) => sum + Number(invoice.received_amount),
     0,
   );
-  const totalRateioBase = invoices.reduce(
+  const totalRateioBase = reportInvoices.reduce(
     (sum, invoice) =>
       sum +
       calculateRateioBase(
@@ -83,8 +108,7 @@ export function buildRateioReport({
     0,
   );
   const totalDeductions = totalReceived - totalRateioBase;
-  const isHol = unit === "HOL";
-  const holTaxTotals = invoices.reduce(
+  const holTaxTotals = reportInvoices.reduce(
     (totals, invoice) => {
       const calculation = calculateHolRateio(Number(invoice.received_amount));
       return {
@@ -111,7 +135,7 @@ export function buildRateioReport({
   const partnerTotals = new Map(
     sortedPartners.map((partner) => [
       partner.id,
-      invoices.reduce(
+      reportInvoices.reduce(
         (sum, invoice) =>
           sum +
           Number(
@@ -209,13 +233,14 @@ export function buildRateioReport({
     "CONVÊNIO",
     "UNIDADE",
     "COMP. FATURAMENTO",
+    ...(isHpoli ? ["PRODUÇÃO", "GLOSA"] : []),
     isHol ? "VALOR-BASE" : "VALOR PAGO",
     isHol ? "DEDUÇÕES 11,93%" : "IMPOSTO",
     isHol ? "VALOR P/ RATEAR" : "VALOR LÍQUIDO",
     ...sortedPartners.map((partner) => partner.name.toUpperCase()),
     "TOTAL RATEADO",
   ];
-  const body = invoices.map((invoice) => {
+  const body = reportInvoices.map((invoice) => {
     const items = grouped.get(invoice.id) || [];
     const holCalculation = calculateHolRateio(
       Number(invoice.received_amount),
@@ -239,6 +264,12 @@ export function buildRateioReport({
       insurerNames.get(invoice.insurer_id) || "Convênio",
       invoice.billing_unit,
       formatCompetenceMonth(invoice.competence),
+      ...(isHpoli
+        ? [
+            money.format(Number(invoice.gross_amount)),
+            money.format(Number(invoice.glosa_amount)),
+          ]
+        : []),
       money.format(Number(invoice.received_amount)),
       money.format(
         isHol ? holCalculation.totalDeductions : rateioDeduction,
@@ -254,6 +285,9 @@ export function buildRateioReport({
     "",
     "",
     "",
+    ...(isHpoli
+      ? [money.format(totalProduction), money.format(totalGlosa)]
+      : []),
     money.format(totalReceived),
     money.format(totalDeductions),
     money.format(totalRateioBase),
@@ -272,8 +306,8 @@ export function buildRateioReport({
     theme: "grid",
     styles: {
       font: "helvetica",
-      fontSize: 6.5,
-      cellPadding: 2.2,
+      fontSize: isHpoli ? 5.6 : 6.5,
+      cellPadding: isHpoli ? 1.4 : 2.2,
       lineColor: [221, 229, 232],
       lineWidth: 0.15,
       textColor: [69, 87, 98],
@@ -284,7 +318,7 @@ export function buildRateioReport({
       fillColor: [11, 79, 108],
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 6.2,
+      fontSize: isHpoli ? 5.2 : 6.2,
       minCellHeight: 10,
       halign: "center",
     },
@@ -296,17 +330,27 @@ export function buildRateioReport({
     },
     alternateRowStyles: { fillColor: [249, 251, 252] },
     columnStyles: {
-      0: { cellWidth: 21, halign: "center" },
-      1: { cellWidth: 24, halign: "center" },
-      2: { cellWidth: 42, fontStyle: "bold" },
-      3: { cellWidth: 18, halign: "center" },
-      4: { cellWidth: 23, halign: "center" },
-      5: { cellWidth: 24, halign: "right" },
-      6: { cellWidth: 24, halign: "right" },
-      7: { cellWidth: 25, halign: "right" },
+      0: { cellWidth: isHpoli ? 16 : 21, halign: "center" },
+      1: { cellWidth: isHpoli ? 18 : 24, halign: "center" },
+      2: { cellWidth: isHpoli ? 28 : 42, fontStyle: "bold" },
+      3: { cellWidth: isHpoli ? 13 : 18, halign: "center" },
+      4: { cellWidth: isHpoli ? 18 : 23, halign: "center" },
+      ...(isHpoli
+        ? {
+            5: { cellWidth: 19, halign: "right" as const },
+            6: { cellWidth: 16, halign: "right" as const },
+            7: { cellWidth: 19, halign: "right" as const },
+            8: { cellWidth: 16, halign: "right" as const },
+            9: { cellWidth: 20, halign: "right" as const },
+          }
+        : {
+            5: { cellWidth: 24, halign: "right" as const },
+            6: { cellWidth: 24, halign: "right" as const },
+            7: { cellWidth: 25, halign: "right" as const },
+          }),
     },
     didParseCell: (hookData) => {
-      if (hookData.column.index >= 8) {
+      if (hookData.column.index >= (isHpoli ? 10 : 8)) {
         hookData.cell.styles.halign = "right";
       }
     },

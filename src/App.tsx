@@ -1309,11 +1309,19 @@ function RateioPage({
             distributionsByInvoice.has(invoice.id),
         )
         .sort((a, b) => {
+          const byBillingCompetence =
+            selectedUnit === "HPOLI"
+              ? a.competence.localeCompare(b.competence)
+              : 0;
           const byInsurer = alphabetic.compare(
             insurerNames.get(a.insurer_id) || "",
             insurerNames.get(b.insurer_id) || "",
           );
-          return byInsurer || (b.paid_at || "").localeCompare(a.paid_at || "");
+          return (
+            byBillingCompetence ||
+            byInsurer ||
+            (b.paid_at || "").localeCompare(a.paid_at || "")
+          );
         }),
     [
       data.invoices,
@@ -1325,6 +1333,14 @@ function RateioPage({
   );
 
   const totals = useMemo(() => {
+    const production = monthInvoices.reduce(
+      (sum, invoice) => sum + Number(invoice.gross_amount),
+      0,
+    );
+    const glosa = monthInvoices.reduce(
+      (sum, invoice) => sum + Number(invoice.glosa_amount),
+      0,
+    );
     const received = monthInvoices.reduce(
       (sum, invoice) => sum + Number(invoice.received_amount),
       0,
@@ -1349,6 +1365,8 @@ function RateioPage({
       0,
     );
     return {
+      production,
+      glosa,
       received,
       rateioBase,
       deductions: received - rateioBase,
@@ -1668,14 +1686,22 @@ function RateioPage({
         <div className="card-heading">
           <div>
             <h2>{rateioUnitLabels[selectedUnit]} do mês</h2>
-            <p>Organizados pela competência escolhida no faturamento.</p>
+            <p>
+              {selectedUnit === "HPOLI"
+                ? "Organizados pela competência de faturamento."
+                : "Organizados pela competência escolhida no faturamento."}
+            </p>
           </div>
         </div>
         {monthInvoices.length ? (
           <div className="table-wrap rateio-table-wrap">
             <table
               className={`rateio-table${
-                selectedUnit === "HOL" ? " hol-rateio-table" : ""
+                selectedUnit === "HOL"
+                  ? " hol-rateio-table"
+                  : selectedUnit === "HPOLI"
+                    ? " hpoli-rateio-table"
+                    : ""
               }`}
             >
               <thead>
@@ -1685,6 +1711,12 @@ function RateioPage({
                   <th>Convênio</th>
                   <th>Unidade</th>
                   <th>Competência do faturamento</th>
+                  {selectedUnit === "HPOLI" ? (
+                    <>
+                      <th>Produção</th>
+                      <th>Glosa</th>
+                    </>
+                  ) : null}
                   <th>{selectedUnit === "HOL" ? "Valor-base" : "Valor pago"}</th>
                   <th>{selectedUnit === "HOL" ? "Deduções 11,93%" : "Imposto"}</th>
                   <th>{selectedUnit === "HOL" ? "Valor para ratear" : "Valor líquido para rateio"}</th>
@@ -1731,6 +1763,16 @@ function RateioPage({
                       <td data-label="Competência do faturamento">
                         {formatCompetenceMonth(invoice.competence)}
                       </td>
+                      {selectedUnit === "HPOLI" ? (
+                        <>
+                          <td data-label="Produção">
+                            {brl.format(Number(invoice.gross_amount))}
+                          </td>
+                          <td data-label="Glosa">
+                            {brl.format(Number(invoice.glosa_amount))}
+                          </td>
+                        </>
+                      ) : null}
                       <td data-label={selectedUnit === "HOL" ? "Valor-base" : "Valor pago"}>
                         {brl.format(Number(invoice.received_amount))}
                       </td>
@@ -1798,6 +1840,12 @@ function RateioPage({
               <tfoot>
                 <tr>
                   <td colSpan={5}>TOTAL DO MÊS</td>
+                  {selectedUnit === "HPOLI" ? (
+                    <>
+                      <td>{brl.format(totals.production)}</td>
+                      <td>{brl.format(totals.glosa)}</td>
+                    </>
+                  ) : null}
                   <td>{brl.format(totals.received)}</td>
                   <td>{brl.format(totals.deductions)}</td>
                   <td>{brl.format(totals.rateioBase)}</td>
