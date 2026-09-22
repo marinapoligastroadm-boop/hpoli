@@ -40,6 +40,12 @@ import {
   calculateRateioBase,
 } from "./lib/rateioCalculations";
 import { supabase } from "./lib/supabase";
+import {
+  calculateNetPaidAmount,
+  calculateTaxFromPaidAmount,
+  DEFAULT_TAX_RATE,
+  taxRateForInsurer,
+} from "./lib/taxCalculations";
 import type {
   BillingUnit,
   Distribution,
@@ -107,10 +113,6 @@ const brl = new Intl.NumberFormat("pt-BR", {
   currency: "BRL",
 });
 const alphabetic = new Intl.Collator("pt-BR", { sensitivity: "base" });
-
-const TAX_RATE = 9.15;
-
-const taxFromPaidAmount = (amount: number) => amount * (TAX_RATE / 100);
 
 const receiptLabel = (status: InvoiceStatus) => {
   if (status === "received") return "Sim";
@@ -282,7 +284,7 @@ function InvoiceTable({
             <th>Produção</th>
             <th>Glosa</th>
             <th>Valor pago</th>
-            <th>Imposto 9,15%</th>
+            <th>Imposto</th>
             <th>Valor líquido</th>
             <th>Recebido</th>
             <th>Data de recebimento</th>
@@ -294,8 +296,15 @@ function InvoiceTable({
           {invoices.map((invoice) => {
             const insurerName =
               insurerNames.get(invoice.insurer_id) || "Convênio";
-            const tax = taxFromPaidAmount(Number(invoice.received_amount));
-            const net = Math.max(0, Number(invoice.received_amount) - tax);
+            const paid = Number(invoice.received_amount);
+            const tax = calculateTaxFromPaidAmount(
+              paid,
+              Number(invoice.tax_rate),
+            );
+            const net = calculateNetPaidAmount(
+              paid,
+              Number(invoice.tax_rate),
+            );
 
             return (
               <tr key={invoice.id}>
@@ -309,7 +318,10 @@ function InvoiceTable({
                 <td data-label="Valor pago">
                   {brl.format(invoice.received_amount)}
                 </td>
-                <td data-label="Imposto 9,15%">{brl.format(tax)}</td>
+                <td data-label="Imposto">
+                  {Number(invoice.tax_rate) === 0 ? "Isento · " : ""}
+                  {brl.format(tax)}
+                </td>
                 <td data-label="Valor líquido">{brl.format(net)}</td>
                 <td data-label="Recebido">
                   <span
@@ -503,10 +515,9 @@ function BillingPage({
           paid: accumulator.paid + Number(invoice.received_amount),
           net:
             accumulator.net +
-            Math.max(
-              0,
-              Number(invoice.received_amount) -
-                taxFromPaidAmount(Number(invoice.received_amount)),
+            calculateNetPaidAmount(
+              Number(invoice.received_amount),
+              Number(invoice.tax_rate),
             ),
         }),
         { production: 0, glosa: 0, paid: 0, net: 0 },
@@ -581,7 +592,9 @@ function BillingPage({
           editingInvoice?.due_date ||
           addDays(issueDate, insurer?.payment_term_days || 0),
         gross_amount: gross,
-        tax_rate: TAX_RATE,
+        tax_rate: insurer
+          ? taxRateForInsurer(insurer.name)
+          : DEFAULT_TAX_RATE,
         glosa_amount: glosa,
         received_amount: received,
         status: values.status,
@@ -763,7 +776,7 @@ function BillingPage({
         <MetricCard
           label="Valor líquido"
           value={brl.format(totals.net)}
-          note="Após imposto de 9,15%"
+          note="Após os impostos aplicáveis"
           tone="slate"
           icon={<TrendingUp size={21} />}
         />

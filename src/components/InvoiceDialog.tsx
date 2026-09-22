@@ -7,6 +7,12 @@ import type {
   InvoiceFormValues,
   InvoiceStatus,
 } from "../types";
+import {
+  calculateNetPaidAmount,
+  calculateTaxFromPaidAmount,
+  DEFAULT_TAX_RATE,
+  taxRateForInsurer,
+} from "../lib/taxCalculations";
 
 type InvoiceDialogProps = {
   open: boolean;
@@ -90,9 +96,16 @@ export function InvoiceDialog({
 
   const totals = useMemo(() => {
     const paid = parseMoney(values.received_amount);
-    const tax = paid * 0.0915;
-    return { tax, net: Math.max(0, paid - tax) };
-  }, [values.received_amount]);
+    const insurer = insurers.find((item) => item.id === values.insurer_id);
+    const taxRate = insurer
+      ? taxRateForInsurer(insurer.name)
+      : DEFAULT_TAX_RATE;
+    return {
+      taxRate,
+      tax: calculateTaxFromPaidAmount(paid, taxRate),
+      net: calculateNetPaidAmount(paid, taxRate),
+    };
+  }, [insurers, values.insurer_id, values.received_amount]);
 
   if (!open) return null;
 
@@ -274,7 +287,10 @@ export function InvoiceDialog({
           <aside className="calculation-strip" aria-label="Resumo calculado">
             <Calculator size={20} aria-hidden="true" />
             <span>
-              Imposto 9,15% <strong>{brl.format(totals.tax)}</strong>
+              {totals.taxRate === 0
+                ? "Imposto isento"
+                : `Imposto ${String(totals.taxRate).replace(".", ",")}%`}{" "}
+              <strong>{brl.format(totals.tax)}</strong>
             </span>
             <span>
               Valor líquido <strong>{brl.format(totals.net)}</strong>

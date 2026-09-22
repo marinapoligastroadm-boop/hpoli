@@ -1,5 +1,9 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
+import {
+  calculateNetPaidAmount,
+  calculateTaxFromPaidAmount,
+} from "./taxCalculations";
 import type { BillingUnit, Insurer, Invoice, InvoiceStatus } from "../types";
 
 type BillingReportOptions = {
@@ -11,7 +15,6 @@ type BillingReportOptions = {
   insurers: Insurer[];
 };
 
-const TAX_RATE = 9.15;
 const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -27,7 +30,6 @@ const receivedLabels: Record<InvoiceStatus, string> = {
   cancelled: "Cancelado",
 };
 
-const calculateTax = (paid: number) => paid * (TAX_RATE / 100);
 const receiptDateFormatter = new Intl.DateTimeFormat("pt-BR");
 const formatReceiptDate = (value: string | null) => {
   if (!value) return "—";
@@ -63,12 +65,13 @@ export function buildBillingReport({
   const totals = sortedInvoices.reduce(
     (result, invoice) => {
       const paid = Number(invoice.received_amount);
-      const tax = calculateTax(paid);
+      const taxRate = Number(invoice.tax_rate);
+      const tax = calculateTaxFromPaidAmount(paid, taxRate);
       result.production += Number(invoice.gross_amount);
       result.glosa += Number(invoice.glosa_amount);
       result.paid += paid;
       result.tax += tax;
-      result.net += Math.max(0, paid - tax);
+      result.net += calculateNetPaidAmount(paid, taxRate);
       return result;
     },
     { production: 0, glosa: 0, paid: 0, tax: 0, net: 0 },
@@ -141,7 +144,7 @@ export function buildBillingReport({
         "PRODUÇÃO",
         "GLOSA",
         "VALOR PAGO",
-        "IMPOSTO 9,15%",
+        "IMPOSTO",
         "VALOR LÍQUIDO",
         "RECEBIDO",
         "DATA DE RECEBIMENTO",
@@ -150,14 +153,15 @@ export function buildBillingReport({
     ],
     body: sortedInvoices.map((invoice) => {
       const paid = Number(invoice.received_amount);
-      const tax = calculateTax(paid);
+      const taxRate = Number(invoice.tax_rate);
+      const tax = calculateTaxFromPaidAmount(paid, taxRate);
       return [
         insurerNames.get(invoice.insurer_id) || "Convênio não identificado",
         money.format(Number(invoice.gross_amount)),
         money.format(Number(invoice.glosa_amount)),
         money.format(paid),
-        money.format(tax),
-        money.format(Math.max(0, paid - tax)),
+        taxRate === 0 ? `ISENTO · ${money.format(tax)}` : money.format(tax),
+        money.format(calculateNetPaidAmount(paid, taxRate)),
         receivedLabels[invoice.status],
         formatReceiptDate(invoice.paid_at),
         formatCompetenceMonth(invoice.rateio_competence),
