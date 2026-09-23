@@ -182,7 +182,7 @@ function MonthSelector({
   onChange: (year: number, month: number) => void;
 }) {
   return (
-    <section className="month-selector" aria-label="Selecionar mês do faturamento">
+    <section className="month-selector" aria-label="Selecionar período mensal">
       <div className="year-control">
         <button
           className="icon-button"
@@ -872,26 +872,41 @@ function BillingPage({
 }
 
 function OverviewPage({ data }: { data: AppData }) {
-  const current = currentPeriod();
-  const selectedPeriod = periodKey(current.year, current.month);
-  const monthInvoices = data.invoices.filter(
-    (invoice) => invoice.competence.slice(0, 7) === selectedPeriod,
+  const initial = currentPeriod();
+  const [year, setYear] = useState(initial.year);
+  const [month, setMonth] = useState(initial.month);
+  const selectedPeriod = periodKey(year, month);
+  const monthInvoices = useMemo(
+    () =>
+      data.invoices.filter(
+        (invoice) => invoice.competence.slice(0, 7) === selectedPeriod,
+      ),
+    [data.invoices, selectedPeriod],
   );
-  const totals = monthInvoices.reduce(
-    (accumulator, invoice) => ({
-      gross: accumulator.gross + Number(invoice.gross_amount),
-      received: accumulator.received + Number(invoice.received_amount),
-      outstanding:
-        accumulator.outstanding + Number(invoice.outstanding_amount),
-    }),
-    { gross: 0, received: 0, outstanding: 0 },
+  const totals = useMemo(
+    () =>
+      monthInvoices.reduce(
+        (accumulator, invoice) => ({
+          gross: accumulator.gross + Number(invoice.gross_amount),
+          received: accumulator.received + Number(invoice.received_amount),
+          outstanding:
+            accumulator.outstanding + Number(invoice.outstanding_amount),
+        }),
+        { gross: 0, received: 0, outstanding: 0 },
+      ),
+    [monthInvoices],
   );
-  const insurerNames = new Map(
-    data.insurers.map((insurer) => [insurer.id, insurer.name]),
+  const insurerNames = useMemo(
+    () => new Map(data.insurers.map((insurer) => [insurer.id, insurer.name])),
+    [data.insurers],
   );
-  const recent = [...data.invoices]
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-    .slice(0, 5);
+  const recent = useMemo(
+    () =>
+      [...monthInvoices]
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        .slice(0, 5),
+    [monthInvoices],
+  );
 
   return (
     <>
@@ -900,14 +915,23 @@ function OverviewPage({ data }: { data: AppData }) {
           <span className="eyebrow">Visão geral</span>
           <h1>Olá, {data.fullName.split(" ")[0]}</h1>
           <p>
-            Resumo financeiro de {fullMonthNames[current.month]} de {current.year}.
+            Resumo financeiro de {fullMonthNames[month]} de {year}.
           </p>
         </div>
         <div className="date-badge">
           <CalendarDays size={18} />
-          {fullMonthNames[current.month]} {current.year}
+          {fullMonthNames[month]} {year}
         </div>
       </div>
+
+      <MonthSelector
+        year={year}
+        month={month}
+        onChange={(nextYear, nextMonth) => {
+          setYear(nextYear);
+          setMonth(nextMonth);
+        }}
+      />
 
       <section className="metrics-grid overview-metrics">
         <MetricCard
@@ -965,7 +989,7 @@ function OverviewPage({ data }: { data: AppData }) {
         <div className="content-card-header">
           <div>
             <h2>Movimentações recentes</h2>
-            <p>Últimos faturamentos atualizados no sistema.</p>
+            <p>Últimos faturamentos atualizados no mês selecionado.</p>
           </div>
         </div>
         {recent.length ? (
@@ -992,7 +1016,7 @@ function OverviewPage({ data }: { data: AppData }) {
           </div>
         ) : (
           <div className="empty-state compact">
-            <p>Nenhuma movimentação cadastrada.</p>
+            <p>Nenhuma movimentação cadastrada neste mês.</p>
           </div>
         )}
       </section>
