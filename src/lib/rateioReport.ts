@@ -11,6 +11,7 @@ import {
   calculateHolRateio,
   calculateRateioBase,
 } from "./rateioCalculations";
+import { loadHpoliReportLogo } from "./reportBranding";
 
 type RateioReportOptions = {
   organizationName: string;
@@ -21,6 +22,7 @@ type RateioReportOptions = {
   insurers: Insurer[];
   partners: Partner[];
   distributions: Distribution[];
+  logoDataUrl?: string | null;
 };
 
 const rateioUnitLabels: Record<BillingUnit, string> = {
@@ -50,6 +52,7 @@ export function buildRateioReport({
   insurers,
   partners,
   distributions,
+  logoDataUrl,
 }: RateioReportOptions) {
   const document = new jsPDF({
     orientation: "landscape",
@@ -159,20 +162,29 @@ export function buildRateioReport({
     creator: "Sistema HPOLI",
   });
 
-  document.setFillColor(7, 47, 67);
+  document.setFillColor(0, 37, 100);
   document.rect(0, 0, pageWidth, 31, "F");
-  document.setFillColor(20, 147, 140);
+  document.setFillColor(162, 211, 253);
   document.rect(0, 29, pageWidth, 2, "F");
-  document.roundedRect(12, 7, 13, 13, 2.5, 2.5, "F");
+  document.setFillColor(255, 255, 255);
+  document.roundedRect(11, 4.5, 61, 21, 2.5, 2.5, "F");
+  if (logoDataUrl) {
+    document.addImage(logoDataUrl, "PNG", 14, 5.3, 55, 20, undefined, "FAST");
+  } else {
+    document.setFillColor(162, 211, 253);
+    document.roundedRect(15, 8.5, 12, 12, 2.5, 2.5, "F");
+    document.setTextColor(0, 37, 100);
+    document.setFont("helvetica", "bold");
+    document.setFontSize(10.5);
+    document.text("H", 21, 16.5, { align: "center" });
+    document.setFontSize(12.5);
+    document.text("HPOLI", 31, 13.3);
+    document.setFont("helvetica", "normal");
+    document.setFontSize(7.2);
+    document.text("CENTRO MÉDICO", 31, 18);
+  }
+
   document.setTextColor(255, 255, 255);
-  document.setFont("helvetica", "bold");
-  document.setFontSize(11);
-  document.text("H", 18.5, 15.7, { align: "center" });
-  document.setFontSize(13);
-  document.text("HPOLI", 30, 12);
-  document.setFont("helvetica", "normal");
-  document.setFontSize(7.5);
-  document.text("CENTRO MÉDICO", 30, 17);
   document.setFont("helvetica", "bold");
   document.setFontSize(16);
   document.text(rateioUnitLabels[unit], pageWidth - 12, 12.5, {
@@ -184,14 +196,14 @@ export function buildRateioReport({
 
   const summary = isHol
     ? ([
-        ["VALOR-BASE HOL", totalReceived, [17, 105, 138]],
+        ["VALOR-BASE HOL", totalReceived, [29, 95, 159]],
         ["DEDUÇÕES 11,93%", totalDeductions, [194, 129, 36]],
-        ["VALOR PARA RATEAR", totalRateioBase, [10, 122, 117]],
+        ["VALOR PARA RATEAR", totalRateioBase, [78, 160, 219]],
       ] as const)
     : ([
-        ["VALOR PAGO", totalReceived, [17, 105, 138]],
+        ["VALOR PAGO", totalReceived, [29, 95, 159]],
         ["IMPOSTOS", totalDeductions, [194, 129, 36]],
-        ["VALOR LÍQUIDO", totalRateioBase, [10, 122, 117]],
+        ["VALOR LÍQUIDO", totalRateioBase, [78, 160, 219]],
       ] as const);
   const cardGap = 5;
   const cardWidth = (pageWidth - 24 - cardGap * 2) / 3;
@@ -315,7 +327,7 @@ export function buildRateioReport({
       overflow: "linebreak",
     },
     headStyles: {
-      fillColor: [11, 79, 108],
+      fillColor: [0, 37, 100],
       textColor: [255, 255, 255],
       fontStyle: "bold",
       fontSize: isHpoli ? 5.2 : 6.2,
@@ -323,7 +335,7 @@ export function buildRateioReport({
       halign: "center",
     },
     footStyles: {
-      fillColor: [223, 243, 241],
+      fillColor: [226, 242, 255],
       textColor: [23, 35, 45],
       fontStyle: "bold",
       halign: "right",
@@ -356,7 +368,7 @@ export function buildRateioReport({
     },
     willDrawPage: ({ pageNumber }) => {
       if (pageNumber === 1) return;
-      document.setFillColor(7, 47, 67);
+      document.setFillColor(0, 37, 100);
       document.rect(0, 0, pageWidth, 12, "F");
       document.setTextColor(255, 255, 255);
       document.setFont("helvetica", "bold");
@@ -389,8 +401,12 @@ export function buildRateioReport({
   return document;
 }
 
-export function downloadRateioReport(options: RateioReportOptions) {
-  const document = buildRateioReport(options);
+export async function downloadRateioReport(options: RateioReportOptions) {
+  const logoDataUrl =
+    options.logoDataUrl === undefined
+      ? await loadHpoliReportLogo()
+      : options.logoDataUrl;
+  const document = buildRateioReport({ ...options, logoDataUrl });
   document.save(
     `relatorio-rateio-${options.unit.toLowerCase()}-${options.periodKey}.pdf`,
   );

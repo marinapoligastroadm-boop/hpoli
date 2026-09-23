@@ -4,6 +4,7 @@ import {
   calculateNetPaidAmount,
   calculateTaxFromPaidAmount,
 } from "./taxCalculations";
+import { loadHpoliReportLogo } from "./reportBranding";
 import type { BillingUnit, Insurer, Invoice, InvoiceStatus } from "../types";
 
 type BillingReportOptions = {
@@ -13,6 +14,7 @@ type BillingReportOptions = {
   periodLabel: string;
   invoices: Invoice[];
   insurers: Insurer[];
+  logoDataUrl?: string | null;
 };
 
 const money = new Intl.NumberFormat("pt-BR", {
@@ -45,6 +47,7 @@ export function buildBillingReport({
   periodLabel,
   invoices,
   insurers,
+  logoDataUrl,
 }: BillingReportOptions) {
   const document = new jsPDF({
     orientation: "landscape",
@@ -84,22 +87,30 @@ export function buildBillingReport({
     creator: "Sistema HPOLI",
   });
 
-  document.setFillColor(7, 47, 67);
+  document.setFillColor(0, 37, 100);
   document.rect(0, 0, pageWidth, 31, "F");
-  document.setFillColor(20, 147, 140);
+  document.setFillColor(162, 211, 253);
   document.rect(0, 29, pageWidth, 2, "F");
 
-  document.setFillColor(20, 147, 140);
-  document.roundedRect(12, 7, 13, 13, 2.5, 2.5, "F");
+  document.setFillColor(255, 255, 255);
+  document.roundedRect(11, 4.5, 61, 21, 2.5, 2.5, "F");
+  if (logoDataUrl) {
+    document.addImage(logoDataUrl, "PNG", 14, 5.3, 55, 20, undefined, "FAST");
+  } else {
+    document.setFillColor(162, 211, 253);
+    document.roundedRect(15, 8.5, 12, 12, 2.5, 2.5, "F");
+    document.setTextColor(0, 37, 100);
+    document.setFont("helvetica", "bold");
+    document.setFontSize(10.5);
+    document.text("H", 21, 16.5, { align: "center" });
+    document.setFontSize(12.5);
+    document.text("HPOLI", 31, 13.3);
+    document.setFont("helvetica", "normal");
+    document.setFontSize(7.2);
+    document.text("CENTRO MÉDICO", 31, 18);
+  }
+
   document.setTextColor(255, 255, 255);
-  document.setFont("helvetica", "bold");
-  document.setFontSize(11);
-  document.text("H", 18.5, 15.7, { align: "center" });
-  document.setFontSize(13);
-  document.text("HPOLI", 30, 12);
-  document.setFont("helvetica", "normal");
-  document.setFontSize(7.5);
-  document.text("CENTRO MÉDICO", 30, 17);
 
   document.setFont("helvetica", "bold");
   document.setFontSize(16);
@@ -111,10 +122,10 @@ export function buildBillingReport({
   document.text(periodLabel, pageWidth - 12, 18.2, { align: "right" });
 
   const summaryItems = [
-    { label: "PRODUÇÃO", value: totals.production, color: [17, 105, 138] },
+    { label: "PRODUÇÃO", value: totals.production, color: [29, 95, 159] },
     { label: "GLOSA", value: totals.glosa, color: [194, 129, 36] },
-    { label: "VALOR PAGO", value: totals.paid, color: [10, 122, 117] },
-    { label: "VALOR LÍQUIDO", value: totals.net, color: [69, 87, 98] },
+    { label: "VALOR PAGO", value: totals.paid, color: [78, 160, 219] },
+    { label: "VALOR LÍQUIDO", value: totals.net, color: [0, 37, 100] },
   ] as const;
   const cardGap = 4;
   const cardWidth = (pageWidth - 24 - cardGap * 3) / 4;
@@ -191,14 +202,14 @@ export function buildBillingReport({
       valign: "middle",
     },
     headStyles: {
-      fillColor: [11, 79, 108],
+      fillColor: [0, 37, 100],
       textColor: [255, 255, 255],
       fontStyle: "bold",
       fontSize: 6.7,
       minCellHeight: 9,
     },
     footStyles: {
-      fillColor: [223, 243, 241],
+      fillColor: [226, 242, 255],
       textColor: [23, 35, 45],
       fontStyle: "bold",
     },
@@ -216,7 +227,7 @@ export function buildBillingReport({
     },
     willDrawPage: ({ pageNumber }) => {
       if (pageNumber === 1) return;
-      document.setFillColor(7, 47, 67);
+      document.setFillColor(0, 37, 100);
       document.rect(0, 0, pageWidth, 12, "F");
       document.setTextColor(255, 255, 255);
       document.setFont("helvetica", "bold");
@@ -249,8 +260,12 @@ export function buildBillingReport({
   return document;
 }
 
-export function downloadBillingReport(options: BillingReportOptions) {
-  const document = buildBillingReport(options);
+export async function downloadBillingReport(options: BillingReportOptions) {
+  const logoDataUrl =
+    options.logoDataUrl === undefined
+      ? await loadHpoliReportLogo()
+      : options.logoDataUrl;
+  const document = buildBillingReport({ ...options, logoDataUrl });
   const filename = `relatorio-faturamento-${options.unit.toLowerCase()}-${
     options.periodKey
   }.pdf`;

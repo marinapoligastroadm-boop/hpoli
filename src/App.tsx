@@ -546,7 +546,7 @@ function BillingPage({
     setExportingPdf(true);
     try {
       const { downloadBillingReport } = await import("./lib/billingReport");
-      downloadBillingReport({
+      await downloadBillingReport({
         organizationName: data.organizationName,
         unit,
         periodKey: selectedPeriod,
@@ -1439,7 +1439,7 @@ function RateioPage({
     setExportingPdf(true);
     try {
       const { downloadRateioReport } = await import("./lib/rateioReport");
-      downloadRateioReport({
+      await downloadRateioReport({
         organizationName: data.organizationName,
         unit: selectedUnit,
         periodKey: selectedPeriod,
