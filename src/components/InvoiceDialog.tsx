@@ -11,7 +11,8 @@ import {
   calculateNetPaidAmount,
   calculateTaxFromPaidAmount,
   DEFAULT_TAX_RATE,
-  taxRateForInsurer,
+  HOL_BILLING_TAX_RATE,
+  taxRateForBilling,
 } from "../lib/taxCalculations";
 
 type InvoiceDialogProps = {
@@ -98,14 +99,16 @@ export function InvoiceDialog({
     const paid = parseMoney(values.received_amount);
     const insurer = insurers.find((item) => item.id === values.insurer_id);
     const taxRate = insurer
-      ? taxRateForInsurer(insurer.name)
-      : DEFAULT_TAX_RATE;
+      ? taxRateForBilling(unit, insurer.name)
+      : unit === "HOL"
+        ? HOL_BILLING_TAX_RATE
+        : DEFAULT_TAX_RATE;
     return {
       taxRate,
       tax: calculateTaxFromPaidAmount(paid, taxRate),
       net: calculateNetPaidAmount(paid, taxRate),
     };
-  }, [insurers, values.insurer_id, values.received_amount]);
+  }, [insurers, unit, values.insurer_id, values.received_amount]);
 
   if (!open) return null;
 

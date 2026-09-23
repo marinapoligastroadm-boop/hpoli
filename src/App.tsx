@@ -44,7 +44,8 @@ import {
   calculateNetPaidAmount,
   calculateTaxFromPaidAmount,
   DEFAULT_TAX_RATE,
-  taxRateForInsurer,
+  HOL_BILLING_TAX_RATE,
+  taxRateForBilling,
 } from "./lib/taxCalculations";
 import type {
   BillingUnit,
@@ -593,8 +594,10 @@ function BillingPage({
           addDays(issueDate, insurer?.payment_term_days || 0),
         gross_amount: gross,
         tax_rate: insurer
-          ? taxRateForInsurer(insurer.name)
-          : DEFAULT_TAX_RATE,
+          ? taxRateForBilling(unit, insurer.name)
+          : unit === "HOL"
+            ? HOL_BILLING_TAX_RATE
+            : DEFAULT_TAX_RATE,
         glosa_amount: glosa,
         received_amount: received,
         status: values.status,
