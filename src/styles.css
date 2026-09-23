@@ -1488,6 +1488,60 @@ tbody tr:hover {
   width: min(100%, 620px);
 }
 
+.billing-report-dialog {
+  width: min(100%, 650px);
+}
+
+.billing-report-form {
+  padding: 22px 24px 24px;
+}
+
+.report-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px;
+}
+
+.report-period-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  border: 1px solid #c9e0f5;
+  border-radius: 11px;
+  padding: 13px 15px;
+  margin-top: 19px;
+  color: var(--navy-700);
+  background: #f0f7fe;
+}
+
+.report-period-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.report-period-note div {
+  display: grid;
+  gap: 3px;
+}
+
+.report-period-note strong {
+  color: var(--navy-900);
+  font-size: 0.82rem;
+}
+
+.report-period-note span {
+  color: var(--slate-600);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.report-filter-error {
+  color: var(--danger);
+  margin: 12px 0 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .insurer-form {
   padding: 22px 24px 24px;
 }
@@ -1929,7 +1983,8 @@ tbody tr:hover {
     justify-self: start;
   }
 
-  .form-grid {
+  .form-grid,
+  .report-filter-grid {
     grid-template-columns: 1fr;
   }
 

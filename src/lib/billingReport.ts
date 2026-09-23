@@ -12,6 +12,7 @@ type BillingReportOptions = {
   unit: BillingUnit;
   periodKey: string;
   periodLabel: string;
+  statusLabel: string;
   invoices: Invoice[];
   insurers: Insurer[];
   logoDataUrl?: string | null;
@@ -45,6 +46,7 @@ export function buildBillingReport({
   unit,
   periodKey,
   periodLabel,
+  statusLabel,
   invoices,
   insurers,
   logoDataUrl,
@@ -63,7 +65,8 @@ export function buildBillingReport({
       insurerNames.get(a.insurer_id) || "",
       insurerNames.get(b.insurer_id) || "",
     );
-    return byName || b.updated_at.localeCompare(a.updated_at);
+    const byCompetence = a.competence.localeCompare(b.competence);
+    return byName || byCompetence || b.updated_at.localeCompare(a.updated_at);
   });
   const totals = sortedInvoices.reduce(
     (result, invoice) => {
@@ -82,7 +85,7 @@ export function buildBillingReport({
 
   document.setProperties({
     title: `Relatório de faturamento ${unit} - ${periodLabel}`,
-    subject: `Faturamento mensal da unidade ${unit}`,
+    subject: `Faturamento da unidade ${unit} - Status: ${statusLabel}`,
     author: organizationName,
     creator: "Sistema HPOLI",
   });
@@ -119,7 +122,12 @@ export function buildBillingReport({
   });
   document.setFont("helvetica", "normal");
   document.setFontSize(9);
-  document.text(periodLabel, pageWidth - 12, 18.2, { align: "right" });
+  document.text(periodLabel, pageWidth - 12, 17.5, { align: "right" });
+  document.setFont("helvetica", "bold");
+  document.setFontSize(8);
+  document.text(`Status: ${statusLabel}`, pageWidth - 12, 23, {
+    align: "right",
+  });
 
   const summaryItems = [
     { label: "PRODUÇÃO", value: totals.production, color: [29, 95, 159] },
@@ -152,6 +160,7 @@ export function buildBillingReport({
     head: [
       [
         "CONVÊNIO",
+        "COMPETÊNCIA",
         "PRODUÇÃO",
         "GLOSA",
         "VALOR PAGO",
@@ -168,6 +177,7 @@ export function buildBillingReport({
       const tax = calculateTaxFromPaidAmount(paid, taxRate);
       return [
         insurerNames.get(invoice.insurer_id) || "Convênio não identificado",
+        formatCompetenceMonth(invoice.competence),
         money.format(Number(invoice.gross_amount)),
         money.format(Number(invoice.glosa_amount)),
         money.format(paid),
@@ -181,6 +191,7 @@ export function buildBillingReport({
     foot: [
       [
         "TOTAL",
+        "",
         money.format(totals.production),
         money.format(totals.glosa),
         money.format(totals.paid),
@@ -215,15 +226,16 @@ export function buildBillingReport({
     },
     alternateRowStyles: { fillColor: [249, 251, 252] },
     columnStyles: {
-      0: { cellWidth: 45, fontStyle: "bold" },
-      1: { cellWidth: 30, halign: "right" },
-      2: { cellWidth: 26, halign: "right" },
-      3: { cellWidth: 30, halign: "right" },
-      4: { cellWidth: 29, halign: "right" },
-      5: { cellWidth: 30, halign: "right" },
-      6: { cellWidth: 22, halign: "center" },
-      7: { cellWidth: 32, halign: "center" },
-      8: { cellWidth: 29, halign: "center" },
+      0: { cellWidth: 40, fontStyle: "bold" },
+      1: { cellWidth: 24, halign: "center" },
+      2: { cellWidth: 28, halign: "right" },
+      3: { cellWidth: 23, halign: "right" },
+      4: { cellWidth: 28, halign: "right" },
+      5: { cellWidth: 27, halign: "right" },
+      6: { cellWidth: 28, halign: "right" },
+      7: { cellWidth: 21, halign: "center" },
+      8: { cellWidth: 30, halign: "center" },
+      9: { cellWidth: 24, halign: "center" },
     },
     willDrawPage: ({ pageNumber }) => {
       if (pageNumber === 1) return;
@@ -234,7 +246,12 @@ export function buildBillingReport({
       document.setFontSize(8);
       document.text(`HPOLI - Faturamento ${unit}`, 12, 8);
       document.setFont("helvetica", "normal");
-      document.text(periodLabel, pageWidth - 12, 8, { align: "right" });
+      document.text(
+        periodLabel + " · " + statusLabel,
+        pageWidth - 12,
+        8,
+        { align: "right" },
+      );
     },
   });
 

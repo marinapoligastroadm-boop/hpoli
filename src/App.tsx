@@ -26,6 +26,11 @@ import {
 } from "lucide-react";
 import { AuthView } from "./components/AuthView";
 import {
+  BillingReportDialog,
+  type BillingReportFilters,
+  type BillingReportStatus,
+} from "./components/BillingReportDialog";
+import {
   InsurerDeleteDialog,
   InsurerDialog,
 } from "./components/InsurerDialog";
@@ -132,6 +137,27 @@ const formatReceiptDate = (value: string | null) => {
 
 const formatCompetenceMonth = (value: string | null) =>
   value ? value.slice(0, 7).split("-").reverse().join("/") : "Escolher mês";
+
+const billingReportStatusLabels: Record<BillingReportStatus, string> = {
+  all: "Todos",
+  pending: "Não recebidos",
+  partial: "Recebido parcialmente",
+  received: "Recebido",
+};
+
+const matchesBillingStatus = (
+  invoice: Invoice,
+  status: BillingReportStatus,
+) =>
+  status === "all" ||
+  (status === "pending"
+    ? invoice.status !== "partial" && invoice.status !== "received"
+    : invoice.status === status);
+
+const formatPeriodLabel = (period: string) => {
+  const [year, month] = period.split("-").map(Number);
+  return fullMonthNames[month - 1] + " de " + year;
+};
 
 const today = () => {
   const current = new Date();
@@ -457,8 +483,9 @@ function BillingPage({
   const [year, setYear] = useState(initial.year);
   const [month, setMonth] = useState(initial.month);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<InvoiceStatus | "all">("all");
+  const [status, setStatus] = useState<BillingReportStatus>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [rateioInvoice, setRateioInvoice] = useState<Invoice | null>(null);
   const [deleteInvoice, setDeleteInvoice] = useState<Invoice | null>(null);
@@ -493,11 +520,7 @@ function BillingPage({
   const filteredInvoices = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return unitInvoices.filter((invoice) => {
-      const matchesStatus =
-        status === "all" ||
-        (status === "pending"
-          ? invoice.status !== "partial" && invoice.status !== "received"
-          : invoice.status === status);
+      const matchesStatus = matchesBillingStatus(invoice, status);
       const matchesSearch =
         !term ||
         (insurerNames.get(invoice.insurer_id) || "")
@@ -538,23 +561,49 @@ function BillingPage({
     setDialogOpen(true);
   };
 
-  const downloadPdf = async () => {
-    if (!unitInvoices.length) {
-      notify("error", "Não há faturamentos neste mês para gerar o relatório.");
+  const downloadPdf = async (filters: BillingReportFilters) => {
+    const reportInvoices = data.invoices.filter(
+      (invoice) =>
+        invoice.billing_unit === unit &&
+        invoice.competence.slice(0, 7) >= filters.startPeriod &&
+        invoice.competence.slice(0, 7) <= filters.endPeriod &&
+        matchesBillingStatus(invoice, filters.status),
+    );
+
+    if (!reportInvoices.length) {
+      notify(
+        "error",
+        "Não há faturamentos com esse status no período selecionado.",
+      );
       return;
     }
 
     setExportingPdf(true);
     try {
       const { downloadBillingReport } = await import("./lib/billingReport");
+      const periodLabel =
+        filters.startPeriod === filters.endPeriod
+          ? formatPeriodLabel(filters.startPeriod)
+          : formatPeriodLabel(filters.startPeriod) +
+            " a " +
+            formatPeriodLabel(filters.endPeriod);
+      const reportKey =
+        filters.startPeriod +
+        (filters.startPeriod === filters.endPeriod
+          ? ""
+          : "-a-" + filters.endPeriod) +
+        "-" +
+        filters.status;
       await downloadBillingReport({
         organizationName: data.organizationName,
         unit,
-        periodKey: selectedPeriod,
-        periodLabel: `${fullMonthNames[month]} de ${year}`,
-        invoices: unitInvoices,
+        periodKey: reportKey,
+        periodLabel,
+        statusLabel: billingReportStatusLabels[filters.status],
+        invoices: reportInvoices,
         insurers: data.insurers,
       });
+      setReportDialogOpen(false);
       notify("success", "Relatório em PDF gerado com sucesso.");
     } catch (error) {
       notify(
@@ -727,15 +776,15 @@ function BillingPage({
           <button
             className="secondary-button report-button"
             type="button"
-            onClick={downloadPdf}
-            disabled={!unitInvoices.length || exportingPdf}
+            onClick={() => setReportDialogOpen(true)}
+            disabled={exportingPdf}
           >
             {exportingPdf ? (
               <LoaderCircle className="spin" size={18} />
             ) : (
               <Download size={18} />
             )}
-            {exportingPdf ? "Gerando PDF..." : "Baixar relatório PDF"}
+            {exportingPdf ? "Gerando PDF..." : "Relatório por status"}
           </button>
           {editable ? (
             <button className="primary-button" type="button" onClick={openNew}>
@@ -805,7 +854,7 @@ function BillingPage({
               className="status-filter"
               value={status}
               onChange={(event) =>
-                setStatus(event.target.value as InvoiceStatus | "all")
+                setStatus(event.target.value as BillingReportStatus)
               }
               aria-label="Filtrar por status"
             >
@@ -844,6 +893,15 @@ function BillingPage({
           }
         }}
         onSave={saveInvoice}
+      />
+
+      <BillingReportDialog
+        open={reportDialogOpen}
+        unit={unit}
+        defaultPeriod={selectedPeriod}
+        generating={exportingPdf}
+        onClose={() => !exportingPdf && setReportDialogOpen(false)}
+        onGenerate={downloadPdf}
       />
 
       <RateioCompetenceDialog
